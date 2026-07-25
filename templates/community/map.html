@@ -1,0 +1,121 @@
+{% extends 'base.html' %}{% load static %}{% block content %}
+<section class="section bg-light-blue">
+  <div class="container">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow dark">COMMUNITY MAP</p>
+        <h2>Explore the island</h2>
+      </div>
+      <span class="text-muted">Browse the island’s featured points of interest below and use the map to find them quickly.</span>
+    </div>
+
+    <div class="row g-4 align-items-start">
+      <div class="col-lg-8">
+        <div class="map-shell">
+          <div data-react-map-root="true" class="h-100"></div>
+          <div class="map-overlay"><i class="bi bi-geo-alt-fill"></i><span>Island preview</span></div>
+          <div class="position-absolute top-0 start-0 m-3 px-3 py-2 rounded-pill bg-white shadow-sm small text-muted">Click the map to add a point of interest</div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        {% if user.is_staff or user.is_superuser %}
+          <div class="card shadow-sm border-0 mb-3">
+            <div class="card-body">
+              <h3 class="h5">Add a new island point</h3>
+              <p class="text-muted mb-3">Only admins can create new points of interest for the island map.</p>
+              <form method="post" action="{% url 'poi_create' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {% for field in poi_form %}
+                  <div class="mb-3">
+                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+                  </div>
+                {% endfor %}
+                <p class="text-muted small mb-3" id="mapPinHelp">Click the map to place a pin and use it for this point of interest. You can leave the title blank and it will be auto-generated from the selected location.</p>
+                <button class="btn btn-gold w-100" type="submit">Create point</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if can_request_photo %}
+          <div class="card shadow-sm border-0">
+            <div class="card-body">
+              <h3 class="h5">Share a new photo</h3>
+              <p class="text-muted mb-3">Add a photo for an existing island point and wait for admin approval.</p>
+              <form method="post" action="{% url 'poi_photo_request' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {% for field in photo_request_form %}
+                  <div class="mb-3">
+                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+                  </div>
+                {% endfor %}
+                <label class="form-label" for="poiSelect">Choose a point</label>
+                <select class="form-control" id="poiSelect" name="poi_id">
+                  {% for point in points_of_interest %}
+                    <option value="{{ point.pk }}">{{ point.title }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-outline-dark w-100 mt-3" type="submit">Submit for approval</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if is_admin and pending_requests %}
+      <div class="mt-4 card shadow-sm border-0">
+        <div class="card-body">
+          <h3 class="h5">Pending approval</h3>
+          <div class="row g-3 mt-1">
+            {% for req in pending_requests %}
+              <div class="col-md-6 col-xl-4">
+                <div class="poi-card">
+                  <div class="poi-header">
+                    <strong>{{ req.poi.title }}</strong>
+                    <span>{{ req.created_at|date:'M d, Y' }}</span>
+                  </div>
+                  {% if req.image %}<img src="{{ req.image.url }}" alt="{{ req.caption|default:'Pending photo request' }}" class="poi-image">{% endif %}
+                  <p class="mb-2">{{ req.caption|default:'Photo update submitted for review.' }}</p>
+                  <form method="post" action="{% url 'poi_request_decision' req.pk %}" class="d-flex gap-2">
+                    {% csrf_token %}
+                    <button class="btn btn-success btn-sm" type="submit" name="decision" value="approved">Approve</button>
+                    <button class="btn btn-outline-danger btn-sm" type="submit" name="decision" value="rejected">Reject</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="mt-4 row g-3">
+      {% for point in points_of_interest %}
+        <div class="col-md-6 col-xl-4">
+          <article class="poi-card">
+            <div class="poi-header">
+              <strong>{{ point.title }}</strong>
+              <span>{{ point.created_at|date:'M d, Y' }}</span>
+            </div>
+            {% if point.image %}<img src="{{ point.image.url }}" alt="{{ point.title }}" class="poi-image">{% endif %}
+            <p class="mb-0">{{ point.description|default:'Community point of interest.' }}</p>
+          </article>
+        </div>
+      {% empty %}
+        <div class="col-12"><p class="text-muted">No approved island points yet. Admins can add the first one.</p></div>
+      {% endfor %}
+    </div>
+
+    <div class="d-none">
+      {% for point in points_of_interest %}
+        <span data-poi-latitude="{{ point.latitude }}" data-poi-longitude="{{ point.longitude }}" data-poi-title="{{ point.title }}" data-poi-description="{{ point.description|default:'Community point of interest.' }}"></span>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}
