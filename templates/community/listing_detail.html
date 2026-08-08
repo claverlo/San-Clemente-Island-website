@@ -14,8 +14,9 @@
 		{% if listing.category == 'Community Post' or listing.category == 'Volunteer Service' %}
 			{% if listing.primary_image_url %}
 				<div class="col-lg-7">
-					<div class="detail-image">
+					<div class="detail-image{% if listing.moderation_status == 'pending' %} moderation-pending-media{% endif %}">
 						<img id="mainListingPhoto" src="{{ listing.primary_image_url }}" alt="{{ listing.title }}">
+						{% if listing.moderation_status == 'pending' %}<span class="moderation-pending-ribbon">Image reported inappropriate - under review</span>{% endif %}
 					</div>
 					{% if photos or listing.image %}
 						<div class="photo-thumbnails">
@@ -32,9 +33,10 @@
 			{% endif %}
 		{% else %}
 			<div class="col-lg-7">
-				<div class="detail-image">
+				<div class="detail-image{% if listing.moderation_status == 'pending' %} moderation-pending-media{% endif %}">
 					{% if listing.primary_image_url %}
 						<img id="mainListingPhoto" src="{{ listing.primary_image_url }}" alt="{{ listing.title }}">
+						{% if listing.moderation_status == 'pending' %}<span class="moderation-pending-ribbon">Image reported inappropriate - under review</span>{% endif %}
 					{% else %}
 						<span class="no-photo-letters" aria-hidden="true">{{ listing.title|slice:":2"|upper }}</span>
 					{% endif %}
@@ -86,7 +88,9 @@
 				<a class="btn btn-gold" href="mailto:{{ listing.contact_email }}?subject=SCI List: {{ listing.title|urlencode }}"><i class="bi bi-envelope-fill"></i> Email contact</a>
 				<a class="btn btn-navy" href="tel:{{ listing.contact_phone }}"><i class="bi bi-telephone-fill"></i> {{ listing.contact_phone }}</a>
 			</div>
-			{% if user != listing.seller and not user.is_staff and not user.is_superuser %}
+			{% if listing.moderation_status == 'pending' %}
+			<div class="alert alert-warning mt-2" role="note">This post was reported by a community member and is awaiting admin review.</div>
+			{% elif user != listing.seller and not user.is_staff and not user.is_superuser %}
 			<form method="post" action="{% url 'report_listing' listing.pk %}" class="mt-2" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">
 				{% csrf_token %}
 				<button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-flag"></i> Report inappropriate</button>

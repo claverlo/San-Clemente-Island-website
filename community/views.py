@@ -9,8 +9,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from random import randint
-from .forms import ListingForm, LostFoundForm, PointOfInterestForm, PointOfInterestPhotoRequestForm, ProfileForm, RegistrationForm
-from .models import Announcement, ContentReport, Event, Listing, ListingImage, LostFound, PointOfInterest, PointOfInterestPhotoRequest, Profile
+from .forms import ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm
+from .models import Announcement, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile
 from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
 
@@ -35,6 +35,25 @@ def send_verification_email(request, profile):
     )
     return verification_url
 
+def run_moderation(text_values, files):
+    status, reason = moderate_text_fields(*text_values)
+    if status != "approved":
+        return status, reason
+    return moderate_uploaded_images(files)
+
+def notify_admin_of_report(request, item_label, reporter, reason):
+    reporter_label = reporter.username if reporter else "an anonymous visitor"
+    admin_url = request.build_absolute_uri(reverse("admin:community_contentreport_changelist"))
+    send_mail(
+        f"SCI List: content reported - {item_label}",
+        f"{reporter_label} reported \"{item_label}\" as inappropriate.\n\n"
+        f"Reason given: {reason or 'No reason given.'}\n\n"
+        f"Review it here: {admin_url}",
+        None,
+        [settings.REPORT_ADMIN_EMAIL],
+        fail_silently=True,
+    )
+
 def home(request):
     Event.purge_expired()
     return render(request, "community/home.html", {
@@ -42,27 +61,10 @@ def home(request):
         "events": Event.objects.upcoming()[:3],
         "contacts": CONTACTS[:3],
         "categories": Listing.CATEGORIES,
-        "points_of_interest": PointOfInterest.objects.filter(approved=True)[:12],
-    })
-
-
-def map_view(request):
-    can_request_photo = False
-    if request.user.is_authenticated:
-        profile = getattr(request.user, "profile", None)
-        can_request_photo = bool(profile and profile.phone)
-    pending_requests = PointOfInterestPhotoRequest.objects.filter(status="pending")
-    return render(request, "community/map.html", {
-        "points_of_interest": PointOfInterest.objects.filter(approved=True),
-        "poi_form": PointOfInterestForm(),
-        "photo_request_form": PointOfInterestPhotoRequestForm(),
-        "can_request_photo": can_request_photo,
-        "pending_requests": pending_requests,
-        "is_admin": request.user.is_staff or request.user.is_superuser,
     })
 
 def marketplace(request):
-    listings = Listing.objects.filter(moderation_status="approved")
+    listings = Listing.objects.filter(moderation_status__in=["approved", "pending"])
     query, category, condition = request.GET.get("q", "").strip(), request.GET.get("category", ""), request.GET.get("condition", "")
     if query: listings = listings.filter(Q(title__icontains=query) | Q(description__icontains=query) | Q(location__icontains=query))
     if category: listings = listings.filter(category=category)
@@ -75,7 +77,7 @@ def listing_detail(request, pk):
         listing = get_object_or_404(Listing.all_objects, pk=pk)
     else:
         listing = get_object_or_404(Listing.all_objects, pk=pk)
-        if listing.moderation_status != "approved" and listing.seller != request.user:
+        if listing.moderation_status == "rejected" and listing.seller != request.user:
             raise Http404()
     return render(request, "community/listing_detail.html", {"listing": listing, "photos": listing.images.all()})
 
@@ -89,12 +91,16 @@ def listing_create(request):
     if request.method == "POST" and form.is_valid():
         listing = form.save(commit=False)
         listing.seller = request.user
-        listing.moderation_status = "approved"
-        listing.moderation_notes = "Auto-approved on submission."
+        status, reason = run_moderation([listing.title, listing.description], form.cleaned_data["photos"])
+        listing.moderation_status = status
+        listing.moderation_notes = reason
         listing.save()
         for photo in form.cleaned_data["photos"]:
             ListingImage.objects.create(listing=listing, image=photo)
-        messages.success(request, "Listing published successfully.")
+        if status == "approved":
+            messages.success(request, "Listing published successfully.")
+        else:
+            messages.success(request, "Listing submitted and sent to admin for review.")
         return redirect(listing)
     if request.method == "POST":
         messages.error(request, "The listing was not posted. Please correct the highlighted fields.")
@@ -106,14 +112,18 @@ def listing_edit(request, pk):
     form = ListingForm(request.POST or None, request.FILES or None, instance=listing)
     if request.method == "POST" and form.is_valid():
         listing = form.save(commit=False)
-        listing.moderation_status = "approved"
-        listing.moderation_notes = "Auto-approved after listing update."
+        status, reason = run_moderation([listing.title, listing.description], form.cleaned_data["photos"])
+        listing.moderation_status = status
+        listing.moderation_notes = reason
         listing.save()
         new_photos = form.cleaned_data["photos"]
         if new_photos:
             for photo in new_photos:
                 ListingImage.objects.create(listing=listing, image=photo)
-        messages.success(request, "Listing updated.")
+        if status == "approved":
+            messages.success(request, "Listing updated.")
+        else:
+            messages.success(request, "Listing updated and sent to admin for review.")
         return redirect("dashboard")
     return render(request, "community/listing_form.html", {"form": form, "heading": "Edit listing"})
 
@@ -132,64 +142,6 @@ def events(request):
 def announcements(request): return render(request, "community/announcements.html", {"announcements": Announcement.objects.all()})
 def emergency(request): return render(request, "community/emergency.html", {"contacts": CONTACTS})
 
-@login_required
-def poi_create(request):
-    if not request.user.is_staff and not request.user.is_superuser:
-        messages.error(request, "Only admins can create new map points of interest.")
-        return redirect("map")
-    form = PointOfInterestForm(request.POST or None, request.FILES or None)
-    if request.method == "POST" and form.is_valid():
-        poi = form.save(commit=False)
-        poi.created_by = request.user
-        poi.save()
-        messages.success(request, "Point of interest added to the community map.")
-        return redirect("map")
-    if request.method == "POST":
-        messages.error(request, "Please fix the highlighted fields before sharing a point of interest.")
-    return redirect("map")
-
-@login_required
-def poi_photo_request(request, pk=None):
-    poi_id = request.POST.get("poi_id") or pk
-    if not poi_id:
-        messages.error(request, "Please choose a map point before submitting a photo request.")
-        return redirect("map")
-    poi = get_object_or_404(PointOfInterest, pk=poi_id)
-    profile = getattr(request.user, "profile", None)
-    if not profile or not profile.phone:
-        messages.error(request, "Only registered users with a phone number can submit photo requests.")
-        return redirect("map")
-    form = PointOfInterestPhotoRequestForm(request.POST or None, request.FILES or None)
-    if request.method == "POST" and form.is_valid():
-        request_obj = form.save(commit=False)
-        request_obj.poi = poi
-        request_obj.user = request.user
-        request_obj.save()
-        messages.success(request, "Your photo request has been submitted for admin approval.")
-        return redirect("map")
-    if request.method == "POST":
-        messages.error(request, "Please add a photo and a short note before submitting.")
-    return redirect("map")
-
-@login_required
-def poi_request_decision(request, pk):
-    if not request.user.is_staff and not request.user.is_superuser:
-        messages.error(request, "Only admins can approve or reject photo requests.")
-        return redirect("map")
-    photo_request = get_object_or_404(PointOfInterestPhotoRequest, pk=pk)
-    if request.method == "POST":
-        decision = request.POST.get("decision", "rejected").lower()
-        photo_request.status = decision if decision in {"approved", "rejected"} else "rejected"
-        photo_request.save()
-        if photo_request.status == "approved":
-            if photo_request.image:
-                photo_request.poi.image.save(photo_request.image.name, photo_request.image, save=False)
-                photo_request.poi.save(update_fields=["image"])
-            messages.success(request, "Photo request approved and attached to the point of interest.")
-        else:
-            messages.info(request, "Photo request rejected.")
-    return redirect("map")
-
 def lost_found(request):
     form = LostFoundForm(request.POST or None, request.FILES or None)
     show_post_form = False
@@ -197,12 +149,8 @@ def lost_found(request):
     sort = request.GET.get("sort", "newest")
     if request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser):
         items_query = LostFound.objects.filter(resolved=False)
-    elif request.user.is_authenticated:
-        items_query = LostFound.objects.filter(resolved=False).filter(
-            Q(moderation_status="approved") | Q(user=request.user, moderation_status="pending")
-        )
     else:
-        items_query = LostFound.objects.filter(resolved=False, moderation_status="approved")
+        items_query = LostFound.objects.filter(resolved=False, moderation_status__in=["approved", "pending"])
 
     if reported_on:
         items_query = items_query.filter(created_at__date=reported_on)
@@ -219,10 +167,17 @@ def lost_found(request):
         if form.is_valid():
             item = form.save(commit=False)
             item.user = request.user
-            item.moderation_status = "approved"
-            item.moderation_notes = "Auto-approved on submission."
+            status, reason = run_moderation(
+                [item.item, item.description],
+                [form.cleaned_data.get("image_1"), form.cleaned_data.get("image_2")],
+            )
+            item.moderation_status = status
+            item.moderation_notes = reason
             item.save()
-            messages.success(request, "Post added.")
+            if status == "approved":
+                messages.success(request, "Post added.")
+            else:
+                messages.success(request, "Post submitted and sent to admin for review.")
             return redirect("lost_found")
     return render(request, "community/lost_found.html", {
         "items_found": items_query.filter(kind="Found"),
@@ -255,10 +210,17 @@ def lost_found_edit(request, pk):
     form = LostFoundForm(request.POST or None, request.FILES or None, instance=item)
     if request.method == "POST" and form.is_valid():
         item = form.save(commit=False)
-        item.moderation_status = "approved"
-        item.moderation_notes = "Auto-approved after report update."
+        status, reason = run_moderation(
+            [item.item, item.description],
+            [form.cleaned_data.get("image_1"), form.cleaned_data.get("image_2")],
+        )
+        item.moderation_status = status
+        item.moderation_notes = reason
         item.save()
-        messages.success(request, "Report updated.")
+        if status == "approved":
+            messages.success(request, "Report updated.")
+        else:
+            messages.success(request, "Report updated and sent to admin for review.")
         return redirect("dashboard")
     return render(request, "community/lost_found_form.html", {"form": form, "heading": "Edit report"})
 
@@ -282,6 +244,7 @@ def report_listing(request, pk):
         listing.moderation_status = "pending"
         listing.moderation_notes = "Flagged by a community report."
         listing.save(update_fields=["moderation_status", "moderation_notes"])
+        notify_admin_of_report(request, listing.title, reporter, reason)
         messages.success(request, "Thanks. Your report was sent to admin for review.")
     return redirect("marketplace")
 
@@ -305,6 +268,7 @@ def report_lost_found(request, pk):
         item.moderation_status = "pending"
         item.moderation_notes = "Flagged by a community report."
         item.save(update_fields=["moderation_status", "moderation_notes"])
+        notify_admin_of_report(request, item.item, reporter, reason)
         messages.success(request, "Thanks. Your report was sent to admin for review.")
     return redirect("lost_found")
 
@@ -384,6 +348,24 @@ def send_phone_verification(request):
         messages.error(request, error or "Could not send verification text.")
     return redirect("dashboard")
 
+
+def contact_admin(request):
+    initial = {}
+    if request.user.is_authenticated:
+        initial = {"name": request.user.get_full_name() or request.user.username, "email": request.user.email}
+    form = ContactMessageForm(request.POST or None, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        contact_message = form.save()
+        send_mail(
+            f"SCI List contact message from {contact_message.name}",
+            f"{contact_message.message}\n\nReply to: {contact_message.email}",
+            None,
+            [settings.REPORT_ADMIN_EMAIL],
+            fail_silently=True,
+        )
+        messages.success(request, "Your message was sent. An admin will get back to you soon.")
+        return redirect("contact_admin")
+    return render(request, "community/contact.html", {"form": form})
 
 @login_required
 def verify_phone(request):

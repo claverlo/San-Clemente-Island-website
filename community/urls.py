@@ -11,12 +11,10 @@ urlpatterns = [
     path("lost-found/<int:pk>/edit/", views.lost_found_edit, name="lost_found_edit"),
     path("lost-found/<int:pk>/delete/", views.lost_found_delete, name="lost_found_delete"),
     path("lost-found/<int:pk>/report/", views.report_lost_found, name="report_lost_found"),
-    path("map/", views.map_view, name="map"), path("pois/new/", views.poi_create, name="poi_create"),
-    path("pois/photo-request/", views.poi_photo_request, name="poi_photo_request"),
-    path("pois/requests/<int:pk>/decision/", views.poi_request_decision, name="poi_request_decision"),
     path("register/", views.register, name="register"), path("dashboard/", views.dashboard, name="dashboard"),
     path("verify-email/<uuid:token>/", views.verify_email, name="verify_email"),
     path("resend-verification/", views.resend_verification, name="resend_verification"),
     path("phone/send-code/", views.send_phone_verification, name="send_phone_verification"),
     path("phone/verify/", views.verify_phone, name="verify_phone"),
+    path("contact/", views.contact_admin, name="contact_admin"),
 ]

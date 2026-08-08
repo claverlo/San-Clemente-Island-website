@@ -550,6 +550,51 @@ svg {
     margin-top: 0.7rem;
 }
 
+.lost-image-wrap {
+    position: relative;
+}
+
+.lost-image-wrap .report-flag-btn {
+    top: -14px;
+    right: -14px;
+}
+
+.moderation-pending-media {
+    position: relative;
+}
+
+.moderation-pending-media img,
+.moderation-pending-media .no-photo-letters,
+.moderation-pending-media .listing-letters-only,
+.moderation-pending-media .detail-letters-only {
+    filter: brightness(0);
+    cursor: default;
+}
+
+.moderation-pending-ribbon {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    background: rgba(180, 35, 47, 0.92);
+    color: #fff;
+    text-align: center;
+    padding: 0.3rem 0;
+    font-weight: 800;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.detail-image .moderation-pending-ribbon {
+    font-size: 0.85rem;
+    padding: 0.45rem 0;
+}
+
 .lost-images img {
     width: 100%;
     height: 120px;

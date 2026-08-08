@@ -77,14 +77,13 @@
 						{% endif %}
 						{% if item.image_1 or item.image_2 %}
 						<div class="lost-images">
-							{% if item.image_1 %}<img src="{{ item.image_1.url }}" alt="Photo for {{ item.item }}">{% endif %}
-							{% if item.image_2 %}<img src="{{ item.image_2.url }}" alt="Photo for {{ item.item }}">{% endif %}
+							{% if item.image_1 %}<div class="lost-image-wrap{% if item.moderation_status == 'pending' %} moderation-pending-media{% endif %}"><img src="{{ item.image_1.url }}" alt="Photo for {{ item.item }}">{% if item.moderation_status == 'pending' %}<span class="moderation-pending-ribbon">Image reported inappropriate - under review</span>{% elif user != item.user and not user.is_staff and not user.is_superuser %}<form method="post" action="{% url 'report_lost_found' item.pk %}" class="report-flag-btn" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">{% csrf_token %}<button type="submit" class="icon-btn" title="Report inappropriate"><i class="bi bi-flag"></i></button></form>{% endif %}</div>{% endif %}
+							{% if item.image_2 %}<div class="lost-image-wrap{% if item.moderation_status == 'pending' %} moderation-pending-media{% endif %}"><img src="{{ item.image_2.url }}" alt="Photo for {{ item.item }}">{% if item.moderation_status == 'pending' %}<span class="moderation-pending-ribbon">Image reported inappropriate - under review</span>{% elif user != item.user and not user.is_staff and not user.is_superuser %}<form method="post" action="{% url 'report_lost_found' item.pk %}" class="report-flag-btn" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">{% csrf_token %}<button type="submit" class="icon-btn" title="Report inappropriate"><i class="bi bi-flag"></i></button></form>{% endif %}</div>{% endif %}
 						</div>
-						{% endif %}
-						{% if user != item.user and not user.is_staff and not user.is_superuser %}
+						{% elif user != item.user and not user.is_staff and not user.is_superuser and item.moderation_status != 'pending' %}
 						<form method="post" action="{% url 'report_lost_found' item.pk %}" class="mt-2" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">
 							{% csrf_token %}
-							<button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-flag"></i> Report inappropriate</button>
+							<button type="submit" class="icon-btn danger" title="Report inappropriate"><i class="bi bi-flag"></i></button>
 						</form>
 						{% endif %}
 					</div>
@@ -127,14 +126,13 @@
 						{% endif %}
 						{% if item.image_1 or item.image_2 %}
 						<div class="lost-images">
-							{% if item.image_1 %}<img src="{{ item.image_1.url }}" alt="Photo for {{ item.item }}">{% endif %}
-							{% if item.image_2 %}<img src="{{ item.image_2.url }}" alt="Photo for {{ item.item }}">{% endif %}
+							{% if item.image_1 %}<div class="lost-image-wrap{% if item.moderation_status == 'pending' %} moderation-pending-media{% endif %}"><img src="{{ item.image_1.url }}" alt="Photo for {{ item.item }}">{% if item.moderation_status == 'pending' %}<span class="moderation-pending-ribbon">Image reported inappropriate - under review</span>{% elif user != item.user and not user.is_staff and not user.is_superuser %}<form method="post" action="{% url 'report_lost_found' item.pk %}" class="report-flag-btn" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">{% csrf_token %}<button type="submit" class="icon-btn" title="Report inappropriate"><i class="bi bi-flag"></i></button></form>{% endif %}</div>{% endif %}
+							{% if item.image_2 %}<div class="lost-image-wrap{% if item.moderation_status == 'pending' %} moderation-pending-media{% endif %}"><img src="{{ item.image_2.url }}" alt="Photo for {{ item.item }}">{% if item.moderation_status == 'pending' %}<span class="moderation-pending-ribbon">Image reported inappropriate - under review</span>{% elif user != item.user and not user.is_staff and not user.is_superuser %}<form method="post" action="{% url 'report_lost_found' item.pk %}" class="report-flag-btn" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">{% csrf_token %}<button type="submit" class="icon-btn" title="Report inappropriate"><i class="bi bi-flag"></i></button></form>{% endif %}</div>{% endif %}
 						</div>
-						{% endif %}
-						{% if user != item.user and not user.is_staff and not user.is_superuser %}
+						{% elif user != item.user and not user.is_staff and not user.is_superuser and item.moderation_status != 'pending' %}
 						<form method="post" action="{% url 'report_lost_found' item.pk %}" class="mt-2" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">
 							{% csrf_token %}
-							<button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-flag"></i> Report inappropriate</button>
+							<button type="submit" class="icon-btn danger" title="Report inappropriate"><i class="bi bi-flag"></i></button>
 						</form>
 						{% endif %}
 					</div>

@@ -162,38 +162,6 @@ class SellerMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self): return f"Message about {self.listing}"
 
-class PointOfInterest(models.Model):
-    title = models.CharField(max_length=140)
-    description = models.TextField(blank=True)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    image = models.ImageField(upload_to="poi/", blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="points_of_interest", blank=True, null=True)
-    approved = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return self.title
-
-class PointOfInterestPhotoRequest(models.Model):
-    STATUS_CHOICES = [("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")]
-    poi = models.ForeignKey(PointOfInterest, on_delete=models.CASCADE, related_name="photo_requests")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="poi_photo_requests")
-    caption = models.CharField(max_length=200, blank=True)
-    image = models.ImageField(upload_to="poi_requests/")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Photo request for {self.poi.title}"
-
-
 class ContentReport(models.Model):
     STATUS_CHOICES = [("open", "Open"), ("resolved", "Resolved")]
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="content_reports", null=True, blank=True)
@@ -214,3 +182,17 @@ class ContentReport(models.Model):
         target = self.listing.title if self.listing else str(self.lost_found)
         who = self.reporter.username if self.reporter else "anonymous"
         return f"Report by {who} on {target}"
+
+
+class ContactMessage(models.Model):
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    message = models.TextField()
+    resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Message from {self.name}"

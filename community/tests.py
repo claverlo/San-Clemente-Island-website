@@ -5,7 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from .models import ContentReport, Event, Listing, ListingImage, LostFound, PointOfInterest, PointOfInterestPhotoRequest, Profile
+from .models import ContentReport, Event, Listing, ListingImage, LostFound, Profile
 
 class CommunityTests(TestCase):
     def setUp(self):
@@ -15,23 +15,10 @@ class CommunityTests(TestCase):
     def test_public_pages(self):
         for name in ["home", "marketplace", "events", "announcements", "lost_found", "emergency"]: self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
-    def test_homepage_has_local_map_preview(self):
-        response = self.client.get(reverse("home"))
-        self.assertNotContains(response, "https://www.google.com/maps")
-        self.assertContains(response, 'data-react-map-root="true"')
-
-    def test_homepage_has_react_map_container(self):
-        response = self.client.get(reverse("home"))
-        self.assertContains(response, 'data-react-map-root="true"')
-
     def test_homepage_uses_community_post_label(self):
         response = self.client.get(reverse("home"))
         self.assertContains(response, "Community Post")
         self.assertNotContains(response, "Community Group")
-
-    def test_map_page_loads(self):
-        response = self.client.get(reverse("map"))
-        self.assertContains(response, "Explore the island")
 
     def test_events_page_deletes_expired_events_and_shows_upcoming(self):
         Event.objects.create(
@@ -77,66 +64,6 @@ class CommunityTests(TestCase):
         self.assertFalse(Event.objects.filter(title="Expired").exists())
         self.assertTrue(Event.objects.filter(pk=upcoming.pk).exists())
 
-    def test_map_page_has_local_interactive_map(self):
-        response = self.client.get(reverse("map"))
-        self.assertNotContains(response, "https://www.google.com/maps")
-        self.assertContains(response, 'data-react-map-root="true"')
-        self.assertContains(response, "Click the map")
-
-    def test_admin_can_create_point_of_interest(self):
-        admin = User.objects.create_user("admin", password="adminpass123", is_staff=True, is_superuser=True)
-        self.client.login(username="admin", password="adminpass123")
-        response = self.client.post(reverse("poi_create"), {
-            "title": "Dockside cafe",
-            "description": "Great place to meet up.",
-            "latitude": "33.0",
-            "longitude": "-118.4",
-        })
-        self.assertRedirects(response, reverse("map"))
-        self.assertTrue(PointOfInterest.objects.filter(title="Dockside cafe").exists())
-
-    def test_admin_can_create_point_of_interest_from_map_click_without_title(self):
-        admin = User.objects.create_user("admin", password="adminpass123", is_staff=True, is_superuser=True)
-        self.client.login(username="admin", password="adminpass123")
-        response = self.client.post(reverse("poi_create"), {
-            "description": "Added from the map preview.",
-            "latitude": "33.123456",
-            "longitude": "-118.654321",
-        })
-        self.assertRedirects(response, reverse("map"))
-        poi = PointOfInterest.objects.get(latitude=33.123456, longitude=-118.654321)
-        self.assertTrue(poi.title.startswith("Point of interest at"))
-
-    def test_phone_registered_user_can_request_photo_approval(self):
-        self.client.login(username="sailor", password="testpass123")
-        poi = PointOfInterest.objects.create(title="Dock", description="Test", latitude=33.0, longitude=-118.4)
-        response = self.client.post(reverse("poi_photo_request"), {
-            "poi_id": poi.pk,
-            "caption": "Fresh photo for review",
-            "image": self.photo("poi-request.gif"),
-        })
-        self.assertRedirects(response, reverse("map"))
-        self.assertTrue(PointOfInterestPhotoRequest.objects.filter(poi=poi, user=self.user, status="pending").exists())
-
-    def test_map_page_shows_pending_requests_for_admin(self):
-        admin = User.objects.create_user("admin", password="adminpass123", is_staff=True, is_superuser=True)
-        poi = PointOfInterest.objects.create(title="Dock", description="Test", latitude=33.0, longitude=-118.4)
-        PointOfInterestPhotoRequest.objects.create(poi=poi, user=self.user, caption="Need review", image=self.photo("pending.gif"))
-        self.client.login(username="admin", password="adminpass123")
-        response = self.client.get(reverse("map"))
-        self.assertContains(response, "Pending approval")
-
-    def test_admin_can_approve_photo_request(self):
-        admin = User.objects.create_user("admin", password="adminpass123", is_staff=True, is_superuser=True)
-        poi = PointOfInterest.objects.create(title="Dock", description="Test", latitude=33.0, longitude=-118.4)
-        request = PointOfInterestPhotoRequest.objects.create(poi=poi, user=self.user, caption="Need review", image=self.photo("approve.gif"))
-        self.client.login(username="admin", password="adminpass123")
-        response = self.client.post(reverse("poi_request_decision", args=[request.pk]), {"decision": "approved"})
-        self.assertRedirects(response, reverse("map"))
-        request.refresh_from_db()
-        self.assertEqual(request.status, "approved")
-        poi.refresh_from_db()
-        self.assertTrue(poi.image)
     def test_marketplace_search(self):
         response = self.client.get(reverse("marketplace"), {"q": "Bike"}); self.assertContains(response, "Bike")
     def test_create_requires_login(self): self.assertEqual(self.client.get(reverse("listing_create")).status_code, 302)
@@ -217,7 +144,7 @@ class CommunityTests(TestCase):
         response = self.client.get(reverse("listing_create"))
         self.assertEqual(response.status_code, 200)
 
-    def test_new_listing_is_auto_approved_and_visible_in_marketplace(self):
+    def test_new_listing_with_clean_text_is_auto_approved_and_visible_in_marketplace(self):
         user = User.objects.create_user("newposter", password="testpass123")
         Profile.objects.create(user=user, phone="555-555-0200", email_verified=True)
         self.client.login(username="newposter", password="testpass123")
@@ -226,7 +153,6 @@ class CommunityTests(TestCase):
             "title": "Pending lamp", "category": "For Sale", "condition": "Good",
             "price": "25.00", "location": "Wilson Cove", "description": "Works well.",
             "contact_email": "seller@example.com", "contact_phone": "555-555-0200",
-            "photos": [self.photo("needs-review.gif")],
         }, follow=True)
 
         listing = Listing.all_objects.get(title="Pending lamp")
@@ -234,7 +160,7 @@ class CommunityTests(TestCase):
         self.assertContains(response, "Listing published successfully")
         self.assertContains(self.client.get(reverse("marketplace")), "Pending lamp")
 
-    def test_flagged_listing_text_is_auto_approved(self):
+    def test_flagged_listing_text_is_sent_to_review(self):
         user = User.objects.create_user("rejectedposter", password="testpass123")
         Profile.objects.create(user=user, phone="555-555-0300", email_verified=True)
         self.client.login(username="rejectedposter", password="testpass123")
@@ -246,8 +172,8 @@ class CommunityTests(TestCase):
         }, follow=True)
 
         listing = Listing.all_objects.get(title="Drug sale")
-        self.assertEqual(listing.moderation_status, "approved")
-        self.assertContains(response, "Listing published successfully")
+        self.assertEqual(listing.moderation_status, "pending")
+        self.assertContains(response, "sent to admin for review")
 
     def test_registration_requires_privacy_disclaimer_consent(self):
         response = self.client.post(reverse("register"), {
@@ -332,7 +258,7 @@ class CommunityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Contact email is required unless category is Community Post")
 
-    def test_lost_found_pending_visible_to_owner_only(self):
+    def test_lost_found_pending_visible_to_everyone_but_marked_under_review(self):
         other_user = User.objects.create_user("other_lf_user", password="otherpass123")
         LostFound.objects.create(
             user=self.user,
@@ -361,7 +287,8 @@ class CommunityTests(TestCase):
 
         public_response = self.client.get(reverse("lost_found"))
         self.assertContains(public_response, "Approved wallet")
-        self.assertNotContains(public_response, "Pending sweater")
+        self.assertContains(public_response, "Pending sweater")
+        self.assertContains(public_response, "Under review")
 
         self.client.login(username="sailor", password="testpass123")
         owner_response = self.client.get(reverse("lost_found"))

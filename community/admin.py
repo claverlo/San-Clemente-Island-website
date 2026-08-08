@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Announcement, ContentReport, Event, Listing, ListingImage, LostFound, PointOfInterest, PointOfInterestPhotoRequest, Profile, SellerMessage
+from .models import Announcement, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile, SellerMessage
 
 
 class UserListingInline(admin.TabularInline):
@@ -67,20 +67,6 @@ class ListingAdmin(admin.ModelAdmin):
         queryset.update(deleted_at=timezone.now())
 
 
-@admin.register(PointOfInterest)
-class PointOfInterestAdmin(admin.ModelAdmin):
-    list_display = ("title", "approved", "created_by", "created_at")
-    list_filter = ("approved", "created_at")
-    search_fields = ("title", "description", "created_by__username")
-
-
-@admin.register(PointOfInterestPhotoRequest)
-class PointOfInterestPhotoRequestAdmin(admin.ModelAdmin):
-    list_display = ("poi", "user", "status", "created_at")
-    list_filter = ("status", "created_at")
-    search_fields = ("poi__title", "caption", "user__username")
-
-
 @admin.register(LostFound)
 class LostFoundAdmin(admin.ModelAdmin):
     list_display = ("item", "kind", "moderation_status", "user", "location", "created_at")
@@ -101,9 +87,50 @@ class LostFoundAdmin(admin.ModelAdmin):
 
 @admin.register(ContentReport)
 class ContentReportAdmin(admin.ModelAdmin):
-    list_display = ("id", "reporter", "listing", "lost_found", "status", "created_at")
+    list_display = ("id", "reporter", "listing", "lost_found", "reason", "status", "created_at")
     list_filter = ("status", "created_at")
     search_fields = ("reporter__username", "reason", "listing__title", "lost_found__item")
+    actions = ("approve_reported_post", "reject_reported_post")
+
+    @admin.action(description="Put post back on the website (approve)")
+    def approve_reported_post(self, request, queryset):
+        count = 0
+        for report in queryset:
+            target = report.listing or report.lost_found
+            if target:
+                target.moderation_status = "approved"
+                target.moderation_notes = ""
+                target.save(update_fields=["moderation_status", "moderation_notes"])
+                count += 1
+            report.status = "resolved"
+            report.save(update_fields=["status"])
+        self.message_user(request, f"{count} post(s) approved and restored to the website.")
+
+    @admin.action(description="Decline post (reject, keep off the website)")
+    def reject_reported_post(self, request, queryset):
+        count = 0
+        for report in queryset:
+            target = report.listing or report.lost_found
+            if target:
+                target.moderation_status = "rejected"
+                target.save(update_fields=["moderation_status"])
+                count += 1
+            report.status = "resolved"
+            report.save(update_fields=["status"])
+        self.message_user(request, f"{count} post(s) declined and kept off the website.")
+
+
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display = ("name", "email", "resolved", "created_at")
+    list_filter = ("resolved", "created_at")
+    search_fields = ("name", "email", "message")
+    actions = ("mark_resolved",)
+
+    @admin.action(description="Mark selected messages resolved")
+    def mark_resolved(self, request, queryset):
+        count = queryset.update(resolved=True)
+        self.message_user(request, f"{count} message(s) marked resolved.")
 
 
 admin.site.register([Announcement, Event, ListingImage, SellerMessage])

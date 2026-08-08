@@ -1,9 +1,9 @@
 from decimal import Decimal
 
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import User
-from .models import Listing, LostFound, PointOfInterest, PointOfInterestPhotoRequest, Profile
+from .models import ContactMessage, Listing, LostFound, Profile
 
 def normalize_phone(value):
     digits = "".join(character for character in value if character.isdigit())
@@ -39,6 +39,10 @@ class BootstrapMixin:
             else:
                 field.widget.attrs["class"] = "form-control"
 class StyledAuthenticationForm(BootstrapMixin, AuthenticationForm):
+    def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
+class StyledPasswordResetForm(BootstrapMixin, PasswordResetForm):
+    def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
+class StyledSetPasswordForm(BootstrapMixin, SetPasswordForm):
     def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
 class RegistrationForm(BootstrapMixin, UserCreationForm):
     email = forms.EmailField(required=True)
@@ -119,10 +123,7 @@ class ListingForm(BootstrapMixin, forms.ModelForm):
         return photos
     def clean_contact_phone(self):
         value = (self.cleaned_data.get("contact_phone") or "").strip()
-        digits = "".join(character for character in value if character.isdigit())
-        if len(digits) < 7 or len(digits) > 15:
-            raise forms.ValidationError("Enter a valid contact phone number.")
-        return value
+        return normalize_phone(value)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -188,10 +189,7 @@ class LostFoundForm(BootstrapMixin, forms.ModelForm):
         value = (self.cleaned_data.get("contact_phone") or "").strip()
         if not value:
             return ""
-        digits = "".join(character for character in value if character.isdigit())
-        if len(digits) < 7 or len(digits) > 15:
-            raise forms.ValidationError("Enter a valid contact phone number.")
-        return value
+        return normalize_phone(value)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -243,34 +241,11 @@ class ProfileForm(BootstrapMixin, forms.ModelForm):
             user.save(update_fields=["first_name", "last_name"])
         return profile
 
-class PointOfInterestForm(BootstrapMixin, forms.ModelForm):
+class ContactMessageForm(BootstrapMixin, forms.ModelForm):
     class Meta:
-        model = PointOfInterest
-        fields = ["title", "description", "latitude", "longitude", "image"]
-        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.apply_styles()
-        self.fields["latitude"].widget.attrs.update({"step": "any"})
-        self.fields["longitude"].widget.attrs.update({"step": "any"})
-        self.fields["title"].required = False
-        self.fields["title"].help_text = "Leave blank to auto-name it from the clicked location."
-
-    def clean(self):
-        cleaned_data = super().clean()
-        title = (cleaned_data.get("title") or "").strip()
-        latitude = cleaned_data.get("latitude")
-        longitude = cleaned_data.get("longitude")
-        if not title and latitude is not None and longitude is not None:
-            cleaned_data["title"] = f"Point of interest at {latitude:.4f}, {longitude:.4f}"
-        return cleaned_data
-
-class PointOfInterestPhotoRequestForm(BootstrapMixin, forms.ModelForm):
-    class Meta:
-        model = PointOfInterestPhotoRequest
-        fields = ["caption", "image"]
-        widgets = {"caption": forms.TextInput(attrs={"placeholder": "Short note for approval"})}
+        model = ContactMessage
+        fields = ["name", "email", "message"]
+        widgets = {"message": forms.Textarea(attrs={"rows": 5, "placeholder": "How can we help?"})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
