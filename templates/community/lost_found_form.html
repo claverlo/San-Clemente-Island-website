@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head compact">
+    <div class="container">
+        <p class="eyebrow">LOST &amp; FOUND</p>
+        <h1>{{ heading }}</h1>
+    </div>
+</div>
+<div class="container section narrow">
+    <form method="post" enctype="multipart/form-data" class="form-panel" novalidate>
+        {% csrf_token %}
+        {% if form.errors %}
+        <div class="alert alert-danger" role="alert">Please fix the highlighted fields and try again.</div>
+        {% endif %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-gold">Save report</button>
+        <a class="btn btn-link" href="{% url 'dashboard' %}">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,4 +1,59 @@
-document.querySelectorAll('.alert:not(.form-error-summary)').forEach((alert) => setTimeout(() => bootstrap.Alert.getOrCreateInstance(alert).close(), 5000));
+document.querySelectorAll('.alert:not(.form-error-summary):not([data-persistent="true"])').forEach((alert) => setTimeout(() => bootstrap.Alert.getOrCreateInstance(alert).close(), 5000));
+
+const disclaimerGate = document.querySelector('[data-disclaimer-gate]');
+if (disclaimerGate) {
+  const homePaths = ['/', '/home/'];
+  if (!homePaths.includes(window.location.pathname)) {
+    disclaimerGate.setAttribute('hidden', '');
+  } else {
+  const acceptButton = disclaimerGate.querySelector('[data-disclaimer-accept]');
+  const declineButton = disclaimerGate.querySelector('[data-disclaimer-decline]');
+  const consentStorageKey = 'sciDisclaimerConsentSessionV1';
+
+  const closeDisclaimerGate = () => {
+    disclaimerGate.setAttribute('hidden', '');
+    document.body.classList.remove('disclaimer-lock');
+  };
+
+  const openDisclaimerGate = () => {
+    disclaimerGate.removeAttribute('hidden');
+    document.body.classList.add('disclaimer-lock');
+    acceptButton?.focus();
+  };
+
+  let hasAccepted = false;
+  try {
+    hasAccepted = window.sessionStorage.getItem(consentStorageKey) === 'accepted';
+  } catch (error) {
+    hasAccepted = false;
+  }
+
+  if (hasAccepted) {
+    closeDisclaimerGate();
+  } else {
+    openDisclaimerGate();
+  }
+
+  acceptButton?.addEventListener('click', () => {
+    try {
+      window.sessionStorage.setItem(consentStorageKey, 'accepted');
+    } catch (error) {
+      // Ignore storage failures and allow access for the current page view.
+    }
+    closeDisclaimerGate();
+  });
+
+  declineButton?.addEventListener('click', () => {
+    try {
+      window.sessionStorage.removeItem(consentStorageKey);
+    } catch (error) {
+      // Ignore storage failures while exiting.
+    }
+    window.location.href = 'about:blank';
+  });
+  }
+}
+
 const firstInvalidField = document.querySelector('.form-panel .errorlist + input, .form-panel .errorlist + select, .form-panel .errorlist + textarea');
 if (firstInvalidField) firstInvalidField.focus();
 document.querySelectorAll('[data-photo-src]').forEach((button) => {
@@ -70,6 +125,48 @@ document.querySelectorAll('[data-phone-input]').forEach((input) => {
   formatPhone();
 });
 
+const listingCategory = document.querySelector('#id_category[data-listing-category]');
+const listingPrice = document.querySelector('#id_price[data-listing-price]');
+const listingEmail = document.querySelector('#id_contact_email[data-listing-email]');
+if (listingCategory && listingPrice && listingEmail) {
+  const priceRow = listingPrice.closest('p');
+  const emailRow = listingEmail.closest('p');
+  const noPriceCategories = ['Community Post', 'Volunteer Service'];
+
+  const toggleCommunityPostFields = () => {
+    const isCommunityPost = listingCategory.value === 'Community Post';
+    const isNoPriceCategory = noPriceCategories.includes(listingCategory.value);
+    if (priceRow) priceRow.style.display = isNoPriceCategory ? 'none' : '';
+    if (isNoPriceCategory) {
+      listingPrice.value = '0.00';
+      listingPrice.disabled = true;
+      listingEmail.required = !isCommunityPost;
+      if (isCommunityPost && emailRow) {
+        let note = emailRow.querySelector('.community-email-note');
+        if (!note) {
+          note = document.createElement('small');
+          note.className = 'community-email-note text-muted d-block';
+          note.textContent = 'Optional for Community Post.';
+          emailRow.appendChild(note);
+        }
+      } else if (emailRow) {
+        const note = emailRow.querySelector('.community-email-note');
+        if (note) note.remove();
+      }
+    } else {
+      listingPrice.disabled = false;
+      listingEmail.required = true;
+      if (emailRow) {
+        const note = emailRow.querySelector('.community-email-note');
+        if (note) note.remove();
+      }
+    }
+  };
+
+  listingCategory.addEventListener('change', toggleCommunityPostFields);
+  toggleCommunityPostFields();
+}
+
 document.querySelectorAll('[data-hero-slideshow]').forEach((slideshow) => {
   const slides = Array.from(slideshow.querySelectorAll('.hero-slide'));
   const dots = Array.from(slideshow.querySelectorAll('.hero-slide-dots span'));
@@ -104,6 +201,34 @@ document.querySelectorAll('[data-hero-slideshow]').forEach((slideshow) => {
   });
   startTimer();
 });
+
+const lostFoundImages = document.querySelectorAll('.lost-images img');
+if (lostFoundImages.length) {
+  const previewBackdrop = document.createElement('div');
+  previewBackdrop.className = 'lost-hover-preview-backdrop';
+  previewBackdrop.setAttribute('aria-hidden', 'true');
+
+  const previewImage = document.createElement('img');
+  previewImage.className = 'lost-hover-preview-image';
+  previewImage.alt = '';
+  previewBackdrop.appendChild(previewImage);
+  document.body.appendChild(previewBackdrop);
+
+  const showPreview = (image) => {
+    previewImage.src = image.currentSrc || image.src;
+    previewImage.alt = image.alt || 'Lost and found preview';
+    previewBackdrop.classList.add('active');
+  };
+
+  const hidePreview = () => {
+    previewBackdrop.classList.remove('active');
+  };
+
+  lostFoundImages.forEach((image) => {
+    image.addEventListener('mouseenter', () => showPreview(image));
+    image.addEventListener('mouseleave', hidePreview);
+  });
+}
 
 const poiMapContainer = document.getElementById('poiMap');
 if (poiMapContainer) {
@@ -282,4 +407,105 @@ if (poiMapContainer) {
   } else {
     poiMapContainer.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-center p-4"><div><strong>Map preview ready</strong><p class="mb-0 text-muted">The map location will appear once the page is loaded on a browser with mapping support.</p></div></div>';
   }
+}
+
+document.querySelectorAll('input[type="password"]').forEach((input) => {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'password-field-wrap';
+  input.parentNode.insertBefore(wrapper, input);
+  wrapper.appendChild(input);
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'password-toggle-btn';
+  toggle.setAttribute('aria-label', 'Show password');
+  toggle.innerHTML = '<i class="bi bi-eye"></i>';
+  toggle.addEventListener('click', () => {
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    toggle.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+    toggle.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+  });
+  wrapper.appendChild(toggle);
+});
+
+const passwordField = document.getElementById('id_password1');
+const passwordChecklist = document.querySelector('#id_password1_helptext ul');
+if (passwordField && passwordChecklist && typeof COMMON_PASSWORDS !== 'undefined') {
+  passwordChecklist.classList.add('password-checklist');
+  const ruleOrder = ['similarity', 'length', 'common', 'numeric'];
+  Array.from(passwordChecklist.children).forEach((item, index) => {
+    item.dataset.rule = ruleOrder[index];
+  });
+
+  const matchItem = document.createElement('li');
+  matchItem.dataset.rule = 'match';
+  matchItem.textContent = 'Passwords match';
+  passwordChecklist.appendChild(matchItem);
+
+  const confirmField = document.getElementById('id_password2');
+  const attributeFields = [
+    document.getElementById('id_username'),
+    document.getElementById('id_first_name'),
+    document.getElementById('id_last_name'),
+    document.getElementById('id_email'),
+  ].filter(Boolean);
+
+  const quickRatio = (a, b) => {
+    if (!a.length && !b.length) return 1;
+    const counts = new Map();
+    for (const char of b) counts.set(char, (counts.get(char) || 0) + 1);
+    let matches = 0;
+    for (const char of a) {
+      const remaining = counts.get(char) || 0;
+      if (remaining > 0) {
+        matches += 1;
+        counts.set(char, remaining - 1);
+      }
+    }
+    return (2 * matches) / (a.length + b.length);
+  };
+
+  const isTooSimilar = (password) => {
+    const lowerPassword = password.toLowerCase();
+    return attributeFields.some((field) => {
+      const value = field.value.toLowerCase();
+      if (!value) return false;
+      const parts = new Set([...value.split(/\W+/).filter(Boolean), value]);
+      return Array.from(parts).some((part) => quickRatio(lowerPassword, part) >= 0.7);
+    });
+  };
+
+  const setState = (item, state) => {
+    item.classList.remove('pc-ok', 'pc-bad');
+    if (state === 'ok') item.classList.add('pc-ok');
+    if (state === 'bad') item.classList.add('pc-bad');
+  };
+
+  const updateChecklist = () => {
+    const password = passwordField.value;
+    const confirm = confirmField ? confirmField.value : '';
+    const touched = password.length > 0;
+
+    const results = {
+      length: password.length >= 8,
+      numeric: !/^\d+$/.test(password),
+      common: !COMMON_PASSWORDS.has(password.trim().toLowerCase()),
+      similarity: !isTooSimilar(password),
+    };
+
+    passwordChecklist.querySelectorAll('li[data-rule]').forEach((item) => {
+      const rule = item.dataset.rule;
+      if (rule === 'match') {
+        setState(item, confirm.length ? (password === confirm ? 'ok' : 'bad') : 'neutral');
+      } else {
+        setState(item, touched ? (results[rule] ? 'ok' : 'bad') : 'neutral');
+      }
+    });
+  };
+
+  [passwordField, confirmField, ...attributeFields].forEach((field) => {
+    field?.addEventListener('input', updateChecklist);
+  });
+  updateChecklist();
 }

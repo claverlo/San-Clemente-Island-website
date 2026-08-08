@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
@@ -29,24 +31,42 @@ class MultipleImageField(forms.ImageField):
 
 class BootstrapMixin:
     def apply_styles(self):
-        for field in self.fields.values(): field.widget.attrs["class"] = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs["class"] = "form-select"
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs["class"] = "form-check-input"
+            else:
+                field.widget.attrs["class"] = "form-control"
 class StyledAuthenticationForm(BootstrapMixin, AuthenticationForm):
     def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
 class RegistrationForm(BootstrapMixin, UserCreationForm):
     email = forms.EmailField(required=True)
-    phone = forms.CharField(max_length=30, required=True, label="Phone number")
+    phone = forms.CharField(max_length=30, required=False, label="Phone number (required to post)")
+    consent_privacy = forms.BooleanField(
+        required=True,
+        label=(
+            "I understand that text/email messages may be sent for account and listing activity, "
+            "and my phone number will not be sold or shared with third-party marketing services."
+        ),
+        error_messages={"required": "You must accept the privacy disclaimer before signing up."},
+    )
     class Meta: model = User; fields = ["username", "first_name", "last_name", "email", "phone", "password1", "password2"]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_styles()
         self.fields["phone"].widget.attrs.update({"inputmode": "tel", "autocomplete": "tel", "data-phone-input": ""})
+        self.fields["phone"].help_text = "Optional for signup. Required before posting listings."
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError("An account already uses this email address.")
         return email
     def clean_phone(self):
-        return normalize_phone(self.cleaned_data["phone"])
+        value = (self.cleaned_data.get("phone") or "").strip()
+        if not value:
+            return ""
+        return normalize_phone(value)
 class ListingForm(BootstrapMixin, forms.ModelForm):
     photos = MultipleImageField(
         required=False,
@@ -55,10 +75,10 @@ class ListingForm(BootstrapMixin, forms.ModelForm):
     )
     class Meta:
         model = Listing
-        fields = ["title", "category", "condition", "price", "location", "description", "contact_email", "contact_phone", "photos", "is_sold"]
+        fields = ["title", "category", "price", "location", "description", "contact_email", "contact_phone", "photos", "is_sold"]
         labels = {
-            "contact_email": "Seller contact email",
-            "contact_phone": "Seller contact phone number",
+            "contact_email": "Contact email",
+            "contact_phone": "Contact phone number",
             "is_sold": "Mark this listing as sold",
         }
         help_texts = {
@@ -70,10 +90,18 @@ class ListingForm(BootstrapMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_styles()
+        # Community Post does not require contact email or price.
+        self.fields["price"].required = False
+        self.fields["contact_email"].required = False
         related_count = self.instance.images.count() if self.instance.pk else 0
         self.existing_photo_count = related_count or (1 if self.instance.pk and self.instance.image else 0)
         self.fields["photos"].widget.attrs.update({"accept": "image/*", "data-max-files": 4, "data-existing-count": self.existing_photo_count})
         self.fields["contact_phone"].widget.attrs.update({"inputmode": "tel", "autocomplete": "tel", "data-phone-input": ""})
+        self.fields["category"].widget.attrs.update({"data-listing-category": ""})
+        self.fields["price"].widget.attrs.update({"data-listing-price": ""})
+        self.fields["contact_email"].widget.attrs.update({"data-listing-email": ""})
+        self.fields["price"].help_text = "Not required for Community Post or Volunteer Service."
+        self.fields["contact_email"].help_text = "Optional for Community Post."
         if self.instance.pk and self.instance.contact_phone:
             try:
                 self.initial["contact_phone"] = normalize_phone(self.instance.contact_phone)
@@ -90,10 +118,93 @@ class ListingForm(BootstrapMixin, forms.ModelForm):
             raise forms.ValidationError(f"This listing already has photos. You can add only {remaining} more.")
         return photos
     def clean_contact_phone(self):
-        return normalize_phone(self.cleaned_data["contact_phone"])
+        value = (self.cleaned_data.get("contact_phone") or "").strip()
+        digits = "".join(character for character in value if character.isdigit())
+        if len(digits) < 7 or len(digits) > 15:
+            raise forms.ValidationError("Enter a valid contact phone number.")
+        return value
+
+    def clean(self):
+        cleaned_data = super().clean()
+        category = (cleaned_data.get("category") or "").strip()
+        price = cleaned_data.get("price")
+        email = (cleaned_data.get("contact_email") or "").strip()
+
+        # Condition is intentionally hidden from the form; keep existing on edit, default on create.
+        cleaned_data["condition"] = self.instance.condition if self.instance.pk else "Good"
+
+        if category in {"Community Post", "Volunteer Service"}:
+            cleaned_data["price"] = Decimal("0.00")
+
+        if category == "Community Post":
+            return cleaned_data
+
+        if category not in {"Community Post", "Volunteer Service"} and price in (None, ""):
+            self.add_error("price", "Price is required unless category is Community Post or Volunteer Service.")
+        if not email:
+            self.add_error("contact_email", "Contact email is required unless category is Community Post.")
+
+        return cleaned_data
 class LostFoundForm(BootstrapMixin, forms.ModelForm):
-    class Meta: model = LostFound; fields = ["kind", "item", "description", "location", "date"]; widgets = {"date": forms.DateInput(attrs={"type": "date"})}
-    def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
+    class Meta:
+        model = LostFound
+        fields = [
+            "kind",
+            "item",
+            "description",
+            "location",
+            "date",
+            "contact_name",
+            "contact_method",
+            "contact_phone",
+            "contact_email",
+            "image_1",
+            "image_2",
+        ]
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}),
+            "description": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.apply_styles()
+        self.fields["contact_name"].required = True
+        self.fields["contact_method"].required = True
+        self.fields["contact_method"].initial = self.fields["contact_method"].initial or "phone"
+        self.fields["contact_phone"].required = False
+        self.fields["contact_phone"].help_text = "Required if contact method is Phone."
+        self.fields["contact_email"].required = False
+        self.fields["contact_email"].help_text = "Required if contact method is Email."
+        self.fields["location"].widget.attrs.update({"placeholder": "Gym, bar, barracks, etc."})
+        self.fields["contact_phone"].widget.attrs.update({"inputmode": "tel", "autocomplete": "tel", "data-phone-input": ""})
+        self.fields["contact_email"].widget.attrs.update({"autocomplete": "email", "placeholder": "name@example.com"})
+        self.fields["image_1"].widget.attrs.update({"accept": "image/*"})
+        self.fields["image_2"].widget.attrs.update({"accept": "image/*"})
+        self.fields["image_1"].help_text = "Optional image 1"
+        self.fields["image_2"].help_text = "Optional image 2"
+
+    def clean_contact_phone(self):
+        value = (self.cleaned_data.get("contact_phone") or "").strip()
+        if not value:
+            return ""
+        digits = "".join(character for character in value if character.isdigit())
+        if len(digits) < 7 or len(digits) > 15:
+            raise forms.ValidationError("Enter a valid contact phone number.")
+        return value
+
+    def clean(self):
+        cleaned_data = super().clean()
+        method = cleaned_data.get("contact_method")
+        phone = (cleaned_data.get("contact_phone") or "").strip()
+        email = (cleaned_data.get("contact_email") or "").strip()
+
+        if method == "phone" and not phone:
+            self.add_error("contact_phone", "Contact phone is required when Phone is selected.")
+        if method == "email" and not email:
+            self.add_error("contact_email", "Contact email is required when Email is selected.")
+
+        return cleaned_data
 class ProfileForm(BootstrapMixin, forms.ModelForm):
     first_name = forms.CharField(max_length=150, required=False, label="First name")
     last_name = forms.CharField(max_length=150, required=False, label="Last name")
@@ -114,7 +225,17 @@ class ProfileForm(BootstrapMixin, forms.ModelForm):
     def clean_phone(self):
         return normalize_phone(self.cleaned_data["phone"])
     def save(self, commit=True):
+        previous_phone = ""
+        if self.instance.pk:
+            previous_phone = Profile.objects.get(pk=self.instance.pk).phone
         profile = super().save(commit=commit)
+
+        if (previous_phone or "").strip() != (profile.phone or "").strip():
+            profile.phone_verified = False
+            profile.clear_phone_verification_code()
+            if commit:
+                profile.save(update_fields=["phone_verified", "phone_verification_code", "phone_verification_sent_at", "phone_verification_expires_at"])
+
         user = self.instance.user
         user.first_name = self.cleaned_data["first_name"].strip()
         user.last_name = self.cleaned_data["last_name"].strip()

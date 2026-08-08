@@ -1,1 +1,149 @@
-{% extends 'base.html' %}{% block content %}<div class="page-head"><div class="container d-flex justify-content-between align-items-end"><div><p class="eyebrow">HELP YOUR NEIGHBORS</p><h1>Lost &amp; Found</h1><p>Report and recover items across the island.</p></div>{% if user.is_authenticated %}<button class="btn btn-gold" data-bs-toggle="collapse" data-bs-target="#postForm"><i class="bi bi-plus-lg"></i> Report item</button>{% endif %}</div></div><div class="container section"><div class="collapse mb-4" id="postForm"><form method="post" class="form-panel narrow">{% csrf_token %}{{ form.as_p }}<button class="btn btn-navy">Post report</button></form></div><div class="row g-3">{% for item in items %}<div class="col-md-6"><article class="lost-card"><span class="status {{ item.kind|lower }}">{{ item.kind }}</span><div><h2>{{ item.item }}</h2><p>{{ item.description }}</p><small><i class="bi bi-geo-alt"></i> {{ item.location }} &nbsp; <i class="bi bi-calendar3"></i> {{ item.date }}</small></div></article></div>{% empty %}<p>No active reports.</p>{% endfor %}</div></div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+	<div class="container d-flex justify-content-between align-items-end">
+		<div>
+			<p class="eyebrow">HELP YOUR NEIGHBORS</p>
+			<h1>Lost &amp; Found</h1>
+			<p>Report and recover items across the island.</p>
+		</div>
+		{% if user.is_authenticated %}
+		<button class="btn btn-gold" data-bs-toggle="collapse" data-bs-target="#postForm">
+			<i class="bi bi-plus-lg"></i> Report item
+		</button>
+		{% else %}
+		<a class="btn btn-gold" href="{% url 'login' %}?next={% url 'lost_found' %}"><i class="bi bi-box-arrow-in-right"></i> Log in to post</a>
+		{% endif %}
+	</div>
+</div>
+
+<div class="container section">
+	<form method="get" class="row g-2 align-items-end mb-3" id="lostFoundFilterForm">
+		<div class="col-sm-4 col-md-3">
+			<label class="form-label" for="reported_on">Reported date</label>
+			<input id="reported_on" type="date" name="reported_on" class="form-control" value="{{ reported_on }}" onchange="this.form.submit()">
+		</div>
+		<div class="col-sm-4 col-md-3">
+			<label class="form-label" for="sort">Sort</label>
+			<select id="sort" name="sort" class="form-select" onchange="this.form.submit()">
+				<option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest reported first</option>
+				<option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest reported first</option>
+			</select>
+		</div>
+	</form>
+
+	<div class="collapse mb-4{% if show_post_form %} show{% endif %}" id="postForm">
+		{% if form.errors %}
+		<div class="alert alert-danger" role="alert">Please fix the highlighted fields and try again.</div>
+		{% endif %}
+		<form method="post" enctype="multipart/form-data" class="form-panel narrow">
+			{% csrf_token %}
+			<div class="alert alert-info" role="note"><strong>Post respectfully.</strong> Reports are posted right away. Community members can report inappropriate content for admin review.</div>
+			{{ form.as_p }}
+			<button class="btn btn-navy">Post report</button>
+		</form>
+	</div>
+
+	<div class="row g-4">
+		<div class="col-lg-6 order-2 order-lg-2">
+			<h2 class="subhead mb-3">Found</h2>
+			<div class="d-flex flex-column gap-3">
+				{% for item in items_found %}
+				<article class="lost-card">
+					<div class="lost-card-body">
+						<div class="lost-card-top">
+							<div>
+								<h2 class="lost-item-title">Item: {{ item.item }}</h2>
+								{% if item.moderation_status != 'approved' %}
+								<span class="tag">{% if item.moderation_status == 'pending' %}Under review{% else %}{{ item.get_moderation_status_display }}{% endif %}</span>
+								{% endif %}
+							</div>
+						{% if user.is_authenticated %}
+						{% if user == item.user or user.is_staff or user.is_superuser %}
+						<div class="lost-actions">
+							<a class="btn btn-sm btn-outline-primary" href="{% url 'lost_found_edit' item.pk %}">Edit</a>
+							<form method="post" action="{% url 'lost_found_delete' item.pk %}" class="lost-delete-form" onsubmit="return confirm('Delete this report?');">
+								{% csrf_token %}
+								<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+							</form>
+						</div>
+						{% endif %}
+						{% endif %}
+						</div>
+						<p>{{ item.description }}</p>
+						<small><i class="bi bi-geo-alt"></i> {{ item.location }} &nbsp; <i class="bi bi-clock-history"></i> Reported {{ item.created_at|date:'M j, Y' }}</small>
+						{% if item.contact_name or item.contact_phone or item.contact_email %}
+						<p class="lost-contact"><i class="bi bi-person-lines-fill"></i> Point of contact: {{ item.contact_name }}{% if item.contact_method == 'email' %} (Email){% else %} (Phone){% endif %}{% if item.contact_method == 'email' and item.contact_email %} · <a href="mailto:{{ item.contact_email }}">{{ item.contact_email }}</a>{% elif item.contact_phone %} · <a href="tel:{{ item.contact_phone }}">{{ item.contact_phone }}</a>{% endif %}</p>
+						{% endif %}
+						{% if item.image_1 or item.image_2 %}
+						<div class="lost-images">
+							{% if item.image_1 %}<img src="{{ item.image_1.url }}" alt="Photo for {{ item.item }}">{% endif %}
+							{% if item.image_2 %}<img src="{{ item.image_2.url }}" alt="Photo for {{ item.item }}">{% endif %}
+						</div>
+						{% endif %}
+						{% if user != item.user and not user.is_staff and not user.is_superuser %}
+						<form method="post" action="{% url 'report_lost_found' item.pk %}" class="mt-2" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">
+							{% csrf_token %}
+							<button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-flag"></i> Report inappropriate</button>
+						</form>
+						{% endif %}
+					</div>
+				</article>
+				{% empty %}
+				<p class="text-muted">No found reports.</p>
+				{% endfor %}
+			</div>
+		</div>
+
+		<div class="col-lg-6 order-1 order-lg-1">
+			<h2 class="subhead mb-3">Lost</h2>
+			<div class="d-flex flex-column gap-3">
+				{% for item in items_lost %}
+				<article class="lost-card">
+					<div class="lost-card-body">
+						<div class="lost-card-top">
+							<div>
+								<h2 class="lost-item-title">Item: {{ item.item }}</h2>
+								{% if item.moderation_status != 'approved' %}
+								<span class="tag">{% if item.moderation_status == 'pending' %}Under review{% else %}{{ item.get_moderation_status_display }}{% endif %}</span>
+								{% endif %}
+							</div>
+						{% if user.is_authenticated %}
+						{% if user == item.user or user.is_staff or user.is_superuser %}
+						<div class="lost-actions">
+							<a class="btn btn-sm btn-outline-primary" href="{% url 'lost_found_edit' item.pk %}">Edit</a>
+							<form method="post" action="{% url 'lost_found_delete' item.pk %}" class="lost-delete-form" onsubmit="return confirm('Delete this report?');">
+								{% csrf_token %}
+								<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+							</form>
+						</div>
+						{% endif %}
+						{% endif %}
+						</div>
+						<p>{{ item.description }}</p>
+						<small><i class="bi bi-geo-alt"></i> {{ item.location }} &nbsp; <i class="bi bi-clock-history"></i> Reported {{ item.created_at|date:'M j, Y' }}</small>
+						{% if item.contact_name or item.contact_phone or item.contact_email %}
+						<p class="lost-contact"><i class="bi bi-person-lines-fill"></i> Point of contact: {{ item.contact_name }}{% if item.contact_method == 'email' %} (Email){% else %} (Phone){% endif %}{% if item.contact_method == 'email' and item.contact_email %} · <a href="mailto:{{ item.contact_email }}">{{ item.contact_email }}</a>{% elif item.contact_phone %} · <a href="tel:{{ item.contact_phone }}">{{ item.contact_phone }}</a>{% endif %}</p>
+						{% endif %}
+						{% if item.image_1 or item.image_2 %}
+						<div class="lost-images">
+							{% if item.image_1 %}<img src="{{ item.image_1.url }}" alt="Photo for {{ item.item }}">{% endif %}
+							{% if item.image_2 %}<img src="{{ item.image_2.url }}" alt="Photo for {{ item.item }}">{% endif %}
+						</div>
+						{% endif %}
+						{% if user != item.user and not user.is_staff and not user.is_superuser %}
+						<form method="post" action="{% url 'report_lost_found' item.pk %}" class="mt-2" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">
+							{% csrf_token %}
+							<button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-flag"></i> Report inappropriate</button>
+						</form>
+						{% endif %}
+					</div>
+				</article>
+				{% empty %}
+				<p class="text-muted">No lost reports.</p>
+				{% endfor %}
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}

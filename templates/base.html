@@ -5,8 +5,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20260711-6">
-<link rel="stylesheet" href="{% static 'css/custom.css' %}?v=20260711-3"></head>
-<body><div class="utility-bar"><div class="container"><span>San Clemente Island Community</span></div></div>
+<link rel="stylesheet" href="{% static 'css/custom.css' %}?v=20260806-10"></head>
+<body>
+<div class="disclaimer-gate" data-disclaimer-gate hidden role="dialog" aria-modal="true" aria-labelledby="disclaimerGateTitle" aria-describedby="disclaimerGateBody">
+<div class="disclaimer-gate-card"><h2 id="disclaimerGateTitle">SCI List Notice</h2><p id="disclaimerGateBody">By entering this website, you agree to use SCI List at your own risk. SCI List is a community board and is not responsible for transactions, losses, damages, or disputes between users.</p><p><strong>Community Disclaimer:</strong> Please be responsible and post appropriate content. Inappropriate content may be held for admin review or removed.</p><p class="mb-0">Do not share credit card details, banking information, passwords, or other sensitive personal information on this website. Choose Agree to continue or Disagree to leave the site.</p><div class="disclaimer-gate-actions"><button type="button" class="btn btn-navy" data-disclaimer-accept>I Agree</button><button type="button" class="btn btn-outline-secondary" data-disclaimer-decline>I Disagree</button></div></div>
+</div>
+<div class="utility-bar"><div class="container"><span>San Clemente Island Community</span></div></div>
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top"><div class="container">
 <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}"><span class="brand-mark">SCI</span><span>SCI LIST<small>ISLAND COMMUNITY EXCHANGE</small></span></a>
 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
@@ -22,5 +26,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 {% if GOOGLE_MAPS_API_KEY %}<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}"></script>{% endif %}
-<script src="{% static 'js/main.js' %}?v=20260711-7"></script>
+<script src="{% static 'js/common-passwords.js' %}?v=20260806-1"></script>
+<script src="{% static 'js/main.js' %}?v=20260806-14"></script>
 <script src="{% static 'js/map-react/main.js' %}?v=20260718-1"></script></body></html>

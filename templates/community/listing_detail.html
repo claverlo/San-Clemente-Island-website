@@ -1,9 +1,110 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="listing-safety-ribbon" role="note" aria-label="Marketplace notice"><div class="listing-safety-track"><span><i class="bi bi-shop"></i> SAFETY WARNING: DO NOT PAY ONLINE OR SHARE YOUR CREDIT CARD NUMBER HERE. SCI LIST IS A COMMUNITY POSTING BOARD, NOT AN ONLINE SHOPPING STORE.</span><span aria-hidden="true"><i class="bi bi-shop"></i> SAFETY WARNING: DO NOT PAY ONLINE OR SHARE YOUR CREDIT CARD NUMBER HERE. SCI LIST IS A COMMUNITY POSTING BOARD, NOT AN ONLINE SHOPPING STORE.</span></div></div>
-<div class="container section"><a class="back-link" href="{% url 'marketplace' %}"><i class="bi bi-arrow-left"></i> Marketplace</a><div class="row g-5 mt-1">
-<div class="col-lg-7"><div class="detail-image">{% if listing.primary_image_url %}<img id="mainListingPhoto" src="{{ listing.primary_image_url }}" alt="{{ listing.title }}">{% else %}<i class="bi bi-image"></i>{% endif %}</div>
-{% if photos or listing.image %}<div class="photo-thumbnails">{% for photo in photos %}<button type="button" class="photo-thumb{% if forloop.first %} active{% endif %}" data-photo-src="{{ photo.image.url }}" aria-label="View photo {{ forloop.counter }}"><img src="{{ photo.image.url }}" alt=""></button>{% empty %}{% if listing.image %}<button type="button" class="photo-thumb active" data-photo-src="{{ listing.image.url }}" aria-label="View photo 1"><img src="{{ listing.image.url }}" alt=""></button>{% endif %}{% endfor %}</div>{% endif %}</div>
-<div class="col-lg-5"><span class="tag">{{ listing.category }}</span><h1 class="detail-title">{{ listing.title }}</h1><div class="detail-price">${{ listing.price }}</div><div class="meta"><span><i class="bi bi-tag"></i> {{ listing.condition }}</span><span><i class="bi bi-geo-alt"></i> {{ listing.location }}</span><span><i class="bi bi-clock"></i> {{ listing.created_at|timesince }} ago</span></div><hr><h5>Description</h5><p class="description">{{ listing.description|linebreaksbr }}</p><div class="seller"><i class="bi bi-person-circle"></i><div><small>SELLER</small><strong>{{ listing.seller.get_full_name|default:listing.seller.username }}</strong></div></div><div class="seller-contact"><a class="btn btn-gold" href="mailto:{{ listing.contact_email }}?subject=SCI List: {{ listing.title|urlencode }}"><i class="bi bi-envelope-fill"></i> Email seller</a><a class="btn btn-navy" href="tel:{{ listing.contact_phone }}"><i class="bi bi-telephone-fill"></i> {{ listing.contact_phone }}</a></div>{% if user == listing.seller %}<div class="d-flex gap-2 mt-3"><a class="btn btn-outline-primary" href="{% url 'listing_edit' listing.pk %}">Edit</a><a class="btn btn-outline-danger" href="{% url 'listing_delete' listing.pk %}">Delete</a></div>{% elif user.is_staff %}<div class="admin-actions mt-3"><span><i class="bi bi-shield-lock-fill"></i> Administrator controls</span><a class="btn btn-danger" href="{% url 'listing_delete' listing.pk %}"><i class="bi bi-trash"></i> Delete posting</a></div>{% endif %}</div>
-</div></div>
+<div class="listing-safety-ribbon" role="note" aria-label="Marketplace notice">
+	<div class="listing-safety-track">
+		<span><i class="bi bi-shop"></i> SAFETY WARNING: DO NOT PAY ONLINE OR SHARE YOUR CREDIT CARD NUMBER HERE. SCI LIST IS A COMMUNITY POSTING BOARD, NOT AN ONLINE SHOPPING STORE.</span>
+		<span aria-hidden="true"><i class="bi bi-shop"></i> SAFETY WARNING: DO NOT PAY ONLINE OR SHARE YOUR CREDIT CARD NUMBER HERE. SCI LIST IS A COMMUNITY POSTING BOARD, NOT AN ONLINE SHOPPING STORE.</span>
+	</div>
+</div>
+
+<div class="container section">
+	<a class="back-link" href="{% url 'marketplace' %}"><i class="bi bi-arrow-left"></i> Marketplace</a>
+
+	<div class="row g-5 mt-1">
+		{% if listing.category == 'Community Post' or listing.category == 'Volunteer Service' %}
+			{% if listing.primary_image_url %}
+				<div class="col-lg-7">
+					<div class="detail-image">
+						<img id="mainListingPhoto" src="{{ listing.primary_image_url }}" alt="{{ listing.title }}">
+					</div>
+					{% if photos or listing.image %}
+						<div class="photo-thumbnails">
+							{% for photo in photos %}
+								<button type="button" class="photo-thumb{% if forloop.first %} active{% endif %}" data-photo-src="{{ photo.image.url }}" aria-label="View photo {{ forloop.counter }}"><img src="{{ photo.image.url }}" alt=""></button>
+							{% empty %}
+								{% if listing.image %}
+									<button type="button" class="photo-thumb active" data-photo-src="{{ listing.image.url }}" aria-label="View photo 1"><img src="{{ listing.image.url }}" alt=""></button>
+								{% endif %}
+							{% endfor %}
+						</div>
+					{% endif %}
+				</div>
+			{% endif %}
+		{% else %}
+			<div class="col-lg-7">
+				<div class="detail-image">
+					{% if listing.primary_image_url %}
+						<img id="mainListingPhoto" src="{{ listing.primary_image_url }}" alt="{{ listing.title }}">
+					{% else %}
+						<span class="no-photo-letters" aria-hidden="true">{{ listing.title|slice:":2"|upper }}</span>
+					{% endif %}
+				</div>
+				{% if photos or listing.image %}
+					<div class="photo-thumbnails">
+						{% for photo in photos %}
+							<button type="button" class="photo-thumb{% if forloop.first %} active{% endif %}" data-photo-src="{{ photo.image.url }}" aria-label="View photo {{ forloop.counter }}"><img src="{{ photo.image.url }}" alt=""></button>
+						{% empty %}
+							{% if listing.image %}
+								<button type="button" class="photo-thumb active" data-photo-src="{{ listing.image.url }}" aria-label="View photo 1"><img src="{{ listing.image.url }}" alt=""></button>
+							{% endif %}
+						{% endfor %}
+					</div>
+				{% endif %}
+			</div>
+		{% endif %}
+
+		<div class="{% if listing.category == 'Community Post' or listing.category == 'Volunteer Service' %}{% if listing.primary_image_url %}col-lg-5{% else %}col-lg-12{% endif %}{% else %}col-lg-5{% endif %}">
+			{% if listing.category == 'Community Post' or listing.category == 'Volunteer Service' %}{% if not listing.primary_image_url %}
+				<div class="detail-letters-only" aria-hidden="true">{{ listing.title|slice:":2"|upper }}</div>
+			{% endif %}{% endif %}
+
+			<span class="tag">{{ listing.category }}</span>
+			<h1 class="detail-title">{{ listing.title }}</h1>
+
+			{% if listing.category != 'Community Post' and listing.category != 'Volunteer Service' %}
+				<div class="detail-price">${{ listing.price }}</div>
+			{% endif %}
+
+			<div class="meta">
+				<span><i class="bi bi-tag"></i> {{ listing.condition }}</span>
+				<span><i class="bi bi-geo-alt"></i> {{ listing.location }}</span>
+				<span><i class="bi bi-clock"></i> {{ listing.created_at|timesince }} ago</span>
+			</div>
+			<hr>
+			<h5>Description</h5>
+			<p class="description">{{ listing.description|linebreaksbr }}</p>
+
+			<div class="seller">
+				<i class="bi bi-person-circle"></i>
+				<div>
+					<small>CONTACT</small>
+					<strong>{{ listing.seller.get_full_name|default:listing.seller.username }}</strong>
+				</div>
+			</div>
+
+			<div class="seller-contact">
+				<a class="btn btn-gold" href="mailto:{{ listing.contact_email }}?subject=SCI List: {{ listing.title|urlencode }}"><i class="bi bi-envelope-fill"></i> Email contact</a>
+				<a class="btn btn-navy" href="tel:{{ listing.contact_phone }}"><i class="bi bi-telephone-fill"></i> {{ listing.contact_phone }}</a>
+			</div>
+			{% if user != listing.seller and not user.is_staff and not user.is_superuser %}
+			<form method="post" action="{% url 'report_listing' listing.pk %}" class="mt-2" onsubmit="return confirm('Report this post as inappropriate? It will be sent to admin for review.');">
+				{% csrf_token %}
+				<button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-flag"></i> Report inappropriate</button>
+			</form>
+			{% endif %}
+
+			{% if user == listing.seller %}
+				<div class="d-flex gap-2 mt-3">
+					<a class="btn btn-outline-primary" href="{% url 'listing_edit' listing.pk %}">Edit</a>
+					<a class="btn btn-outline-danger" href="{% url 'listing_delete' listing.pk %}">Delete</a>
+				</div>
+			{% elif user.is_staff %}
+				<div class="admin-actions mt-3">
+					<span><i class="bi bi-shield-lock-fill"></i> Administrator controls</span>
+					<a class="btn btn-danger" href="{% url 'listing_delete' listing.pk %}"><i class="bi bi-trash"></i> Delete posting</a>
+				</div>
+			{% endif %}
+		</div>
+	</div>
+</div>
 {% endblock %}

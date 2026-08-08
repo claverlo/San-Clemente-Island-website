@@ -3,11 +3,16 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.db.models import Q
+from django.conf import settings
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from random import randint
 from .forms import ListingForm, LostFoundForm, PointOfInterestForm, PointOfInterestPhotoRequestForm, ProfileForm, RegistrationForm
-from .models import Announcement, Event, Listing, ListingImage, LostFound, PointOfInterest, PointOfInterestPhotoRequest, Profile
+from .models import Announcement, ContentReport, Event, Listing, ListingImage, LostFound, PointOfInterest, PointOfInterestPhotoRequest, Profile
+from .moderation import moderate_text_fields, moderate_uploaded_images
+from .sms import send_phone_verification_text
 
 CONTACTS = [
     ("Emergency / Fire / Medical", "911", "For immediate life-safety emergencies"),
@@ -31,9 +36,10 @@ def send_verification_email(request, profile):
     return verification_url
 
 def home(request):
+    Event.purge_expired()
     return render(request, "community/home.html", {
-        "listings": Listing.objects.filter(is_sold=False)[:4],
-        "events": Event.objects.filter(date__gte=timezone.now())[:3],
+        "listings": Listing.objects.filter(is_sold=False, moderation_status="approved")[:4],
+        "events": Event.objects.upcoming()[:3],
         "contacts": CONTACTS[:3],
         "categories": Listing.CATEGORIES,
         "points_of_interest": PointOfInterest.objects.filter(approved=True)[:12],
@@ -56,7 +62,7 @@ def map_view(request):
     })
 
 def marketplace(request):
-    listings = Listing.objects.all()
+    listings = Listing.objects.filter(moderation_status="approved")
     query, category, condition = request.GET.get("q", "").strip(), request.GET.get("category", ""), request.GET.get("condition", "")
     if query: listings = listings.filter(Q(title__icontains=query) | Q(description__icontains=query) | Q(location__icontains=query))
     if category: listings = listings.filter(category=category)
@@ -65,18 +71,17 @@ def marketplace(request):
     return render(request, "community/marketplace.html", {"listings": listings, "categories": Listing.CATEGORIES, "conditions": Listing.CONDITIONS, "query": query, "selected_category": category, "selected_condition": condition})
 
 def listing_detail(request, pk):
-    listing = get_object_or_404(Listing, pk=pk)
+    if request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser):
+        listing = get_object_or_404(Listing.all_objects, pk=pk)
+    else:
+        listing = get_object_or_404(Listing.all_objects, pk=pk)
+        if listing.moderation_status != "approved" and listing.seller != request.user:
+            raise Http404()
     return render(request, "community/listing_detail.html", {"listing": listing, "photos": listing.images.all()})
 
 @login_required
 def listing_create(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
-    if not profile.email_verified:
-        messages.error(request, "Verify your email before posting a listing.")
-        return redirect("dashboard")
-    if not profile.phone:
-        messages.error(request, "Add your phone number before posting a listing.")
-        return redirect("dashboard")
     initial = {}
     if request.method == "GET":
         initial = {"contact_email": request.user.email, "contact_phone": profile.phone}
@@ -84,6 +89,8 @@ def listing_create(request):
     if request.method == "POST" and form.is_valid():
         listing = form.save(commit=False)
         listing.seller = request.user
+        listing.moderation_status = "approved"
+        listing.moderation_notes = "Auto-approved on submission."
         listing.save()
         for photo in form.cleaned_data["photos"]:
             ListingImage.objects.create(listing=listing, image=photo)
@@ -98,13 +105,16 @@ def listing_edit(request, pk):
     listing = get_object_or_404(Listing, pk=pk, seller=request.user)
     form = ListingForm(request.POST or None, request.FILES or None, instance=listing)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        listing = form.save(commit=False)
+        listing.moderation_status = "approved"
+        listing.moderation_notes = "Auto-approved after listing update."
+        listing.save()
         new_photos = form.cleaned_data["photos"]
         if new_photos:
             for photo in new_photos:
                 ListingImage.objects.create(listing=listing, image=photo)
         messages.success(request, "Listing updated.")
-        return redirect(listing)
+        return redirect("dashboard")
     return render(request, "community/listing_form.html", {"form": form, "heading": "Edit listing"})
 
 @login_required
@@ -116,7 +126,9 @@ def listing_delete(request, pk):
     if request.method == "POST": listing.delete(); messages.success(request, "Listing deleted."); return redirect("dashboard")
     return render(request, "community/confirm_delete.html", {"listing": listing})
 
-def events(request): return render(request, "community/events.html", {"events": Event.objects.all()})
+def events(request):
+    Event.purge_expired()
+    return render(request, "community/events.html", {"events": Event.objects.upcoming()})
 def announcements(request): return render(request, "community/announcements.html", {"announcements": Announcement.objects.all()})
 def emergency(request): return render(request, "community/emergency.html", {"contacts": CONTACTS})
 
@@ -179,20 +191,130 @@ def poi_request_decision(request, pk):
     return redirect("map")
 
 def lost_found(request):
-    form = LostFoundForm(request.POST or None)
+    form = LostFoundForm(request.POST or None, request.FILES or None)
+    show_post_form = False
+    reported_on = request.GET.get("reported_on", "").strip()
+    sort = request.GET.get("sort", "newest")
+    if request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser):
+        items_query = LostFound.objects.filter(resolved=False)
+    elif request.user.is_authenticated:
+        items_query = LostFound.objects.filter(resolved=False).filter(
+            Q(moderation_status="approved") | Q(user=request.user, moderation_status="pending")
+        )
+    else:
+        items_query = LostFound.objects.filter(resolved=False, moderation_status="approved")
+
+    if reported_on:
+        items_query = items_query.filter(created_at__date=reported_on)
+
+    if sort == "oldest":
+        items_query = items_query.order_by("created_at")
+    else:
+        sort = "newest"
+        items_query = items_query.order_by("-created_at")
+
     if request.method == "POST":
+        show_post_form = True
         if not request.user.is_authenticated: messages.info(request, "Please log in to post an item."); return redirect("login")
-        if form.is_valid(): item = form.save(commit=False); item.user = request.user; item.save(); messages.success(request, "Post added."); return redirect("lost_found")
-    return render(request, "community/lost_found.html", {"items": LostFound.objects.filter(resolved=False), "form": form})
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.user = request.user
+            item.moderation_status = "approved"
+            item.moderation_notes = "Auto-approved on submission."
+            item.save()
+            messages.success(request, "Post added.")
+            return redirect("lost_found")
+    return render(request, "community/lost_found.html", {
+        "items_found": items_query.filter(kind="Found"),
+        "items_lost": items_query.filter(kind="Lost"),
+        "form": form,
+        "show_post_form": show_post_form,
+        "reported_on": reported_on,
+        "current_sort": sort,
+    })
+
+
+@login_required
+def lost_found_delete(request, pk):
+    item = get_object_or_404(LostFound, pk=pk)
+    if item.user != request.user and not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "You do not have permission to delete this report.")
+        return redirect("lost_found")
+    if request.method == "POST":
+        item.delete()
+        messages.success(request, "Report deleted.")
+    return redirect("lost_found")
+
+
+@login_required
+def lost_found_edit(request, pk):
+    item = get_object_or_404(LostFound, pk=pk)
+    if item.user != request.user and not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "You do not have permission to edit this report.")
+        return redirect("lost_found")
+    form = LostFoundForm(request.POST or None, request.FILES or None, instance=item)
+    if request.method == "POST" and form.is_valid():
+        item = form.save(commit=False)
+        item.moderation_status = "approved"
+        item.moderation_notes = "Auto-approved after report update."
+        item.save()
+        messages.success(request, "Report updated.")
+        return redirect("dashboard")
+    return render(request, "community/lost_found_form.html", {"form": form, "heading": "Edit report"})
+
+
+def report_listing(request, pk):
+    listing = get_object_or_404(Listing.all_objects, pk=pk)
+    if request.method == "POST":
+        reason = request.POST.get("reason", "").strip()[:255]
+        reporter = request.user if request.user.is_authenticated else None
+        if reporter:
+            report, created = ContentReport.objects.get_or_create(
+                reporter=reporter,
+                listing=listing,
+                defaults={"reason": reason},
+            )
+            if not created and reason:
+                report.reason = reason
+                report.save(update_fields=["reason"])
+        else:
+            ContentReport.objects.create(listing=listing, reason=reason)
+        listing.moderation_status = "pending"
+        listing.moderation_notes = "Flagged by a community report."
+        listing.save(update_fields=["moderation_status", "moderation_notes"])
+        messages.success(request, "Thanks. Your report was sent to admin for review.")
+    return redirect("marketplace")
+
+
+def report_lost_found(request, pk):
+    item = get_object_or_404(LostFound, pk=pk)
+    if request.method == "POST":
+        reason = request.POST.get("reason", "").strip()[:255]
+        reporter = request.user if request.user.is_authenticated else None
+        if reporter:
+            report, created = ContentReport.objects.get_or_create(
+                reporter=reporter,
+                lost_found=item,
+                defaults={"reason": reason},
+            )
+            if not created and reason:
+                report.reason = reason
+                report.save(update_fields=["reason"])
+        else:
+            ContentReport.objects.create(lost_found=item, reason=reason)
+        item.moderation_status = "pending"
+        item.moderation_notes = "Flagged by a community report."
+        item.save(update_fields=["moderation_status", "moderation_notes"])
+        messages.success(request, "Thanks. Your report was sent to admin for review.")
+    return redirect("lost_found")
 
 def register(request):
     form = RegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         user = form.save()
-        profile = Profile.objects.create(user=user, phone=form.cleaned_data["phone"])
+        Profile.objects.create(user=user, phone=form.cleaned_data["phone"], email_verified=True)
         login(request, user)
-        send_verification_email(request, profile)
-        messages.success(request, "Account created. Check your email for the verification link.")
+        messages.success(request, "Account created. Add a phone number in your dashboard before posting listings.")
         return redirect("dashboard")
     return render(request, "registration/register.html", {"form": form})
 
@@ -216,6 +338,75 @@ def resend_verification(request):
 @login_required
 def dashboard(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
+    has_phone = bool((profile.phone or "").strip())
+    can_post_listing = True
     form = ProfileForm(request.POST or None, instance=profile)
     if request.method == "POST" and form.is_valid(): form.save(); messages.success(request, "Profile updated."); return redirect("dashboard")
-    return render(request, "community/dashboard.html", {"profile": profile, "profile_form": form, "listings": request.user.listings.all(), "inquiries": sum((list(x.messages.all()) for x in request.user.listings.all()), [])})
+    report_queryset = LostFound.objects.all() if (request.user.is_staff or request.user.is_superuser) else LostFound.objects.filter(user=request.user)
+    return render(request, "community/dashboard.html", {
+        "profile": profile,
+        "has_phone": has_phone,
+        "can_post_listing": can_post_listing,
+        "phone_code_sent": bool(profile.phone_verification_sent_at),
+        "profile_form": form,
+        "listings": request.user.listings.all(),
+        "inquiries": sum((list(x.messages.all()) for x in request.user.listings.all()), []),
+        "lost_found_reports": report_queryset,
+    })
+
+
+@login_required
+def send_phone_verification(request):
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    if not profile.phone:
+        messages.error(request, "Add a phone number first, then request a verification code.")
+        return redirect("dashboard")
+
+    code = f"{randint(0, 999999):06d}"
+    profile.phone_verified = False
+    profile.set_phone_verification_code(code)
+    profile.save(update_fields=[
+        "phone_verified",
+        "phone_verification_code",
+        "phone_verification_sent_at",
+        "phone_verification_expires_at",
+    ])
+
+    sent, error = send_phone_verification_text(profile.phone, code)
+    if sent:
+        messages.success(request, "Verification code sent by text message.")
+    else:
+        if settings.DEBUG:
+            messages.info(request, f"SMS is not configured. Test code: {code}")
+        messages.error(request, error or "Could not send verification text.")
+    return redirect("dashboard")
+
+
+@login_required
+def verify_phone(request):
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    submitted_code = (request.POST.get("phone_code") or "").strip()
+    if not submitted_code:
+        messages.error(request, "Enter the 6-digit verification code from your text message.")
+        return redirect("dashboard")
+
+    if profile.is_phone_code_valid(submitted_code):
+        profile.phone_verified = True
+        profile.clear_phone_verification_code()
+        profile.save(update_fields=[
+            "phone_verified",
+            "phone_verification_code",
+            "phone_verification_sent_at",
+            "phone_verification_expires_at",
+        ])
+        messages.success(request, "Phone number verified. You can now post listings.")
+    else:
+        messages.error(request, "Invalid or expired code. Request a new verification code and try again.")
+
+    return redirect("dashboard")
