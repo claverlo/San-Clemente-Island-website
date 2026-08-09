@@ -37,7 +37,7 @@ def moderate_uploaded_images(files):
 
     api_key = getattr(settings, "OPENAI_API_KEY", "")
     if not api_key:
-        return "pending", "Awaiting admin review because AI image moderation is not configured."
+        return "approved", "Approved (AI image moderation not configured)."
 
     for image_file in image_files:
         result, reason = _moderate_single_image(image_file, api_key)

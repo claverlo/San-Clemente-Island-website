@@ -198,9 +198,9 @@ class CommunityTests(TestCase):
             "photos": [self.photo(f"photo-{number}.gif") for number in range(4)],
         }, follow=True)
         listing = Listing.all_objects.get(title="Four photo item")
-        self.assertEqual(listing.moderation_status, "pending")
+        self.assertEqual(listing.moderation_status, "approved")
         self.assertEqual(ListingImage.objects.filter(listing=listing).count(), 4)
-        self.assertContains(response, "admin review")
+        self.assertContains(response, "Listing published successfully")
 
     def test_listing_rejects_more_than_four_photos(self):
         self.client.login(username="sailor", password="testpass123")
