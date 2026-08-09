@@ -6,3 +6,5 @@ venv/
 .DS_Store
 staticfiles/
 db.sqlite3
+submission/
+images requirement for final 120/
