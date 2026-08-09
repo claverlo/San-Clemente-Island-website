@@ -145,12 +145,16 @@ def emergency(request): return render(request, "community/emergency.html", {"con
 def lost_found(request):
     form = LostFoundForm(request.POST or None, request.FILES or None)
     show_post_form = False
+    query = request.GET.get("q", "").strip()
     reported_on = request.GET.get("reported_on", "").strip()
     sort = request.GET.get("sort", "newest")
     if request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser):
         items_query = LostFound.objects.filter(resolved=False)
     else:
         items_query = LostFound.objects.filter(resolved=False, moderation_status__in=["approved", "pending"])
+
+    if query:
+        items_query = items_query.filter(Q(item__icontains=query) | Q(description__icontains=query) | Q(location__icontains=query))
 
     if reported_on:
         items_query = items_query.filter(created_at__date=reported_on)
@@ -184,6 +188,7 @@ def lost_found(request):
         "items_lost": items_query.filter(kind="Lost"),
         "form": form,
         "show_post_form": show_post_form,
+        "query": query,
         "reported_on": reported_on,
         "current_sort": sort,
     })

@@ -19,6 +19,10 @@
 
 <div class="container section">
 	<form method="get" class="row g-2 align-items-end mb-3" id="lostFoundFilterForm">
+		<div class="col-sm-6 col-md-4">
+			<label class="form-label" for="q">Search</label>
+			<div class="search-input"><i class="bi bi-search"></i><input id="q" class="form-control" type="text" name="q" value="{{ query }}" placeholder="Search item, description, location"></div>
+		</div>
 		<div class="col-sm-4 col-md-3">
 			<label class="form-label" for="reported_on">Reported date</label>
 			<input id="reported_on" type="date" name="reported_on" class="form-control" value="{{ reported_on }}" onchange="this.form.submit()">
@@ -29,6 +33,9 @@
 				<option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest reported first</option>
 				<option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest reported first</option>
 			</select>
+		</div>
+		<div class="col-sm-4 col-md-2">
+			<button class="btn btn-navy w-100" type="submit">Search</button>
 		</div>
 	</form>
 
