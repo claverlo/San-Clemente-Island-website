@@ -253,7 +253,7 @@ export default function App({ adminMode = false }) {
         {!admin && (
           <a
             className="btn btn-success w-100 mb-2"
-            href="/admin/login/?next=/admin/"
+            href="/admin/login/?next=/map/admin"
             target="_top"
           >
             ADMIN ACCESS
