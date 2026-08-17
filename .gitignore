@@ -8,3 +8,4 @@ staticfiles/
 db.sqlite3
 submission/
 images requirement for final 120/
+map_frontend/node_modules/

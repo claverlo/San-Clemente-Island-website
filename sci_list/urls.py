@@ -2,11 +2,18 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve
 from community.forms import StyledAuthenticationForm, StyledPasswordResetForm, StyledSetPasswordForm
+from mapapi.frontend import serve_map_frontend
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("map/api/", include("mapapi.urls")),
+    path("map/favicon.svg", serve, {"document_root": settings.MAP_FRONTEND_DIST_DIR, "path": "favicon.svg"}),
+    path("map/icons.svg", serve, {"document_root": settings.MAP_FRONTEND_DIST_DIR, "path": "icons.svg"}),
+    re_path(r"^map/assets/(?P<path>.*)$", serve, {"document_root": settings.MAP_FRONTEND_DIST_DIR / "assets"}),
+    re_path(r"^map/(?!api/|assets/|favicon\.svg|icons\.svg).*$", serve_map_frontend),
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html", authentication_form=StyledAuthenticationForm), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("password-reset/", auth_views.PasswordResetView.as_view(
