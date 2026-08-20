@@ -5,6 +5,7 @@ import {
   TileLayer,
   Marker,
   Popup,
+  Circle,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -56,6 +57,60 @@ function makeIcon(image, active, hasPending) {
     className: "",
     iconSize: [60, 60],
   });
+}
+
+function makeUserLocationIcon(heading) {
+  const rotation = typeof heading === "number" ? heading : 0;
+  return L.divIcon({
+    html: `
+      <div style="
+        width:150px;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+      ">
+        <div style="
+          background:#1a73e8;
+          color:#fff;
+          font-weight:800;
+          font-size:15px;
+          letter-spacing:0.02em;
+          padding:6px 14px;
+          border-radius:8px;
+          white-space:nowrap;
+          box-shadow:0 2px 6px rgba(0,0,0,0.45);
+          margin-bottom:6px;
+        ">YOU ARE HERE</div>
+
+        <div style="
+          width:52px;
+          height:52px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          transform: rotate(${rotation}deg);
+          transition: transform 0.15s ease;
+        ">
+          <svg width="52" height="52" viewBox="0 0 48 48" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55));">
+            <polygon points="24,3 41,43 24,33 7,43" fill="#1a73e8" stroke="white" stroke-width="2.5" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </div>
+    `,
+    className: "",
+    iconSize: [150, 96],
+    iconAnchor: [75, 70],
+  });
+}
+
+function extractCompassHeading(event) {
+  if (typeof event.webkitCompassHeading === "number") {
+    return event.webkitCompassHeading;
+  }
+  if (typeof event.alpha === "number") {
+    return 360 - event.alpha;
+  }
+  return null;
 }
 
 function FlyToSpot({ selected }) {
@@ -140,8 +195,87 @@ export default function App({ adminMode = false }) {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [heading, setHeading] = useState(null);
+  const [compassNeedsPermission, setCompassNeedsPermission] = useState(false);
 
   const admin = adminMode;
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        });
+
+        if (typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading)) {
+          setHeading((prev) => (prev === null ? pos.coords.heading : prev));
+        }
+      },
+      () => {
+        setUserLocation(null);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  useEffect(() => {
+    const handleOrientation = (event) => {
+      const compassHeading = extractCompassHeading(event);
+      if (compassHeading !== null && !Number.isNaN(compassHeading)) {
+        setHeading(compassHeading);
+      }
+    };
+
+    const needsIOSPermission =
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function";
+
+    if (needsIOSPermission) {
+      setCompassNeedsPermission(true);
+    } else if (typeof window !== "undefined" && window.DeviceOrientationEvent) {
+      window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+      window.addEventListener("deviceorientation", handleOrientation, true);
+    }
+
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", handleOrientation, true);
+      window.removeEventListener("deviceorientation", handleOrientation, true);
+    };
+  }, []);
+
+  const enableCompass = () => {
+    if (
+      typeof DeviceOrientationEvent === "undefined" ||
+      typeof DeviceOrientationEvent.requestPermission !== "function"
+    ) {
+      return;
+    }
+
+    DeviceOrientationEvent.requestPermission()
+      .then((response) => {
+        if (response === "granted") {
+          window.addEventListener(
+            "deviceorientation",
+            (event) => {
+              const compassHeading = extractCompassHeading(event);
+              if (compassHeading !== null && !Number.isNaN(compassHeading)) {
+                setHeading(compassHeading);
+              }
+            },
+            true
+          );
+          setCompassNeedsPermission(false);
+        }
+      })
+      .catch(() => {});
+  };
 
   const handleAdminLogin = async () => {
     setLoginError("");
@@ -288,6 +422,15 @@ export default function App({ adminMode = false }) {
         >
           Close Menu
         </button>
+
+        {compassNeedsPermission && (
+          <button
+            className="btn btn-outline-light w-100 mb-2"
+            onClick={enableCompass}
+          >
+            Enable Compass
+          </button>
+        )}
 
         {!admin && (
           <button
@@ -614,6 +757,28 @@ export default function App({ adminMode = false }) {
           })}
 
           {admin && pending && <Marker position={[pending.lat, pending.lng]} />}
+
+          {userLocation && (
+            <>
+              <Circle
+                center={[userLocation.lat, userLocation.lng]}
+                radius={userLocation.accuracy}
+                pathOptions={{
+                  color: "#1a73e8",
+                  fillColor: "#1a73e8",
+                  fillOpacity: 0.15,
+                  weight: 1,
+                }}
+              />
+              <Marker
+                position={[userLocation.lat, userLocation.lng]}
+                icon={makeUserLocationIcon(heading)}
+                zIndexOffset={1000}
+              >
+                <Popup>You are here</Popup>
+              </Marker>
+            </>
+          )}
         </MapContainer>
       </div>
 
