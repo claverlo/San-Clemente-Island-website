@@ -59,16 +59,35 @@ function makeIcon(image, active, hasPending) {
   });
 }
 
-function makeUserLocationIcon(heading) {
+function makeUserLocationIcon(heading, accuracyMeters) {
   const rotation = typeof heading === "number" ? heading : 0;
+  const accuracyFeet =
+    typeof accuracyMeters === "number" && !Number.isNaN(accuracyMeters)
+      ? Math.round(accuracyMeters * 3.28084)
+      : null;
+  const accuracyText =
+    accuracyFeet !== null
+      ? `Location may be off by up to ${accuracyFeet} ft`
+      : "Location accuracy varies";
+
   return L.divIcon({
     html: `
       <div style="
-        width:150px;
+        width:170px;
         display:flex;
         flex-direction:column;
         align-items:center;
       ">
+        <div style="
+          background:rgba(0,0,0,0.72);
+          color:#fff;
+          font-size:11px;
+          padding:3px 10px;
+          border-radius:6px;
+          white-space:nowrap;
+          margin-bottom:4px;
+        ">${accuracyText}</div>
+
         <div style="
           background:#1a73e8;
           color:#fff;
@@ -98,8 +117,8 @@ function makeUserLocationIcon(heading) {
       </div>
     `,
     className: "",
-    iconSize: [150, 96],
-    iconAnchor: [75, 70],
+    iconSize: [170, 122],
+    iconAnchor: [85, 96],
   });
 }
 
@@ -831,7 +850,7 @@ export default function App({ adminMode = false }) {
               />
               <Marker
                 position={[userLocation.lat, userLocation.lng]}
-                icon={makeUserLocationIcon(heading)}
+                icon={makeUserLocationIcon(heading, userLocation.accuracy)}
                 zIndexOffset={1000}
               >
                 <Popup>You are here</Popup>
