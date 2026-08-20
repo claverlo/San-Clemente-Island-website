@@ -49,15 +49,30 @@ class SpotDetailView(APIView):
 
     def patch(self, request, spot_id):
         spot = get_object_or_404(Spot, id=spot_id)
-        try:
-            lat = float(request.data.get("lat"))
-            lng = float(request.data.get("lng"))
-        except (TypeError, ValueError):
-            return Response({"detail": "lat and lng are required."}, status=400)
+        update_fields = []
 
-        spot.lat = lat
-        spot.lng = lng
-        spot.save(update_fields=["lat", "lng"])
+        name = request.data.get("name")
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return Response({"detail": "name cannot be empty."}, status=400)
+            spot.name = name
+            update_fields.append("name")
+
+        lat = request.data.get("lat")
+        lng = request.data.get("lng")
+        if lat is not None or lng is not None:
+            try:
+                spot.lat = float(lat)
+                spot.lng = float(lng)
+            except (TypeError, ValueError):
+                return Response({"detail": "lat and lng must both be provided as numbers."}, status=400)
+            update_fields.extend(["lat", "lng"])
+
+        if not update_fields:
+            return Response({"detail": "Nothing to update."}, status=400)
+
+        spot.save(update_fields=update_fields)
         data = SpotSerializer(spot, context=spot_context(request)).data
         return Response(data)
 

@@ -54,6 +54,11 @@ export function moveSpot(spotId, lat, lng) {
   return request(`/map/api/spots/${spotId}/`, { method: "PATCH", body });
 }
 
+export function renameSpot(spotId, name) {
+  const body = new URLSearchParams({ name });
+  return request(`/map/api/spots/${spotId}/`, { method: "PATCH", body });
+}
+
 export function uploadPhoto(spotId, file) {
   const body = new FormData();
   body.append("image", file);

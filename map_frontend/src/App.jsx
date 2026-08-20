@@ -213,6 +213,18 @@ export default function App({ adminMode = false }) {
     await refreshSpots();
   };
 
+  const renameSpot = async (index) => {
+    const spot = spots[index];
+    const newName = window.prompt("Enter new name:", spot.name);
+    if (newName === null) return;
+
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === spot.name) return;
+
+    await api.renameSpot(spot.id, trimmed);
+    await refreshSpots();
+  };
+
   const deleteGalleryImage = async (spotIndex, photoId) => {
     if (!window.confirm("Delete this photo?")) return;
     await api.rejectPhoto(spots[spotIndex].id, photoId);
@@ -578,6 +590,13 @@ export default function App({ adminMode = false }) {
                           }
                         >
                           Change Main Photo
+                        </button>
+
+                        <button
+                          className="btn btn-outline-secondary btn-sm w-100 mt-2"
+                          onClick={() => renameSpot(i)}
+                        >
+                          Rename Spot
                         </button>
 
                         <button
