@@ -76,6 +76,11 @@ export function changeMainImage(spotId, file) {
   });
 }
 
+export function adminLogin(username, password) {
+  const body = new URLSearchParams({ username, password });
+  return request("/map/api/admin/login/", { method: "POST", body });
+}
+
 export function adminLogout() {
   return request("/map/api/admin/logout/", { method: "POST" });
 }

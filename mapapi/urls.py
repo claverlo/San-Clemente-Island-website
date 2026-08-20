@@ -25,6 +25,7 @@ urlpatterns = [
         views.PhotoApproveView.as_view(),
         name="photo-approve",
     ),
+    path("admin/login/", views.AdminLoginView.as_view(), name="admin-login"),
     path("admin/logout/", views.AdminLogoutView.as_view(), name="admin-logout"),
     path("admin/status/", views.AdminStatusView.as_view(), name="admin-status"),
 ]

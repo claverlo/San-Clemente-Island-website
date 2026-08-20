@@ -1,4 +1,4 @@
-from django.contrib.auth import logout
+from django.contrib.auth import authenticate, login as auth_login, logout
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -107,6 +107,19 @@ class PhotoApproveView(APIView):
         photo.save()
         data = SpotSerializer(photo.spot, context=spot_context(request)).data
         return Response(data)
+
+
+class AdminLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get("username")
+        password = request.data.get("password")
+        user = authenticate(request, username=username, password=password)
+        if user is not None and user.is_staff:
+            auth_login(request, user)
+            return Response({"isAdmin": True})
+        return Response({"detail": "Invalid username or password."}, status=403)
 
 
 class AdminLogoutView(APIView):

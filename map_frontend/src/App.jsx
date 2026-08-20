@@ -135,8 +135,29 @@ export default function App({ adminMode = false }) {
   const [showWarning, setShowWarning] = useState(false);
   const [uploadIndex, setUploadIndex] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
 
   const admin = adminMode;
+
+  const handleAdminLogin = async () => {
+    setLoginError("");
+    setLoggingIn(true);
+    try {
+      await api.adminLogin(loginUsername, loginPassword);
+      setShowAdminLogin(false);
+      setLoginUsername("");
+      setLoginPassword("");
+      navigate("/admin");
+    } catch (err) {
+      setLoginError(err.message || "Invalid username or password.");
+    } finally {
+      setLoggingIn(false);
+    }
+  };
 
   const refreshSpots = async () => {
     const data = await api.getSpots();
@@ -251,13 +272,12 @@ export default function App({ adminMode = false }) {
         </button>
 
         {!admin && (
-          <a
+          <button
             className="btn btn-success w-100 mb-2"
-            href="/admin/login/?next=/map/admin"
-            target="_top"
+            onClick={() => setShowAdminLogin(true)}
           >
             ADMIN ACCESS
-          </a>
+          </button>
         )}
 
         {admin && (
@@ -640,6 +660,60 @@ export default function App({ adminMode = false }) {
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {showAdminLogin && (
+        <div style={styles.warningOverlay}>
+          <div style={styles.warningBox}>
+            <h5>Admin Login</h5>
+
+            <input
+              className="form-control mb-2"
+              placeholder="Username"
+              autoFocus
+              value={loginUsername}
+              onChange={(e) => setLoginUsername(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdminLogin();
+              }}
+            />
+
+            <input
+              className="form-control mb-2"
+              type="password"
+              placeholder="Password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdminLogin();
+              }}
+            />
+
+            {loginError && (
+              <div className="alert alert-danger p-2">{loginError}</div>
+            )}
+
+            <button
+              className="btn btn-success w-100 mb-2"
+              disabled={loggingIn}
+              onClick={handleAdminLogin}
+            >
+              {loggingIn ? "Logging in…" : "Log In"}
+            </button>
+
+            <button
+              className="btn btn-secondary w-100"
+              onClick={() => {
+                setShowAdminLogin(false);
+                setLoginError("");
+                setLoginUsername("");
+                setLoginPassword("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
