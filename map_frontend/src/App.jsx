@@ -125,6 +125,19 @@ function FlyToSpot({ selected }) {
   return null;
 }
 
+function FlyToUserLocation({ trigger, userLocation }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (trigger && userLocation) {
+      map.flyTo([userLocation.lat, userLocation.lng], 16);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trigger]);
+
+  return null;
+}
+
 function ClickToPlace({ enabled, onPlace }) {
   useMapEvents({
     click(e) {
@@ -198,6 +211,7 @@ export default function App({ adminMode = false }) {
   const [userLocation, setUserLocation] = useState(null);
   const [heading, setHeading] = useState(null);
   const [compassNeedsPermission, setCompassNeedsPermission] = useState(false);
+  const [flyToMyLocationTick, setFlyToMyLocationTick] = useState(0);
   const [showLocationPrompt, setShowLocationPrompt] = useState(true);
   const [locationTrackingStarted, setLocationTrackingStarted] = useState(false);
   const locationWatchId = useRef(null);
@@ -330,6 +344,13 @@ export default function App({ adminMode = false }) {
     setTimeout(() => {
       openSpotPopup(spot);
     }, 50);
+  };
+
+  const goToMyLocation = () => {
+    if (!userLocation) return;
+    setSelected(null);
+    setMenuOpen(false);
+    setFlyToMyLocationTick((tick) => tick + 1);
   };
 
   const saveSpot = async () => {
@@ -467,6 +488,28 @@ export default function App({ adminMode = false }) {
 
         <h5 style={{ color: "white", fontWeight: "bold" }}>Locations</h5>
 
+        <div
+          style={{
+            ...styles.item,
+            background: "#1a73e8",
+            color: "#ffffff",
+            opacity: userLocation ? 1 : 0.5,
+            cursor: userLocation ? "pointer" : "default",
+          }}
+          onClick={goToMyLocation}
+        >
+          <span
+            style={{
+              color: "#ffffff",
+              fontSize: "18px",
+              fontWeight: "700",
+              display: "inline-block",
+            }}
+          >
+            📍 My Location
+          </span>
+        </div>
+
         {sortedSpots.map((spot) => (
           <div
             key={spot.name}
@@ -543,6 +586,13 @@ export default function App({ adminMode = false }) {
       </div>
 
       <div className="map-area">
+        {!userLocation && (
+          <div style={styles.locationHint}>
+            Don&rsquo;t see your location? Refresh the page and click
+            &ldquo;Allow&rdquo; when your browser asks for your location.
+          </div>
+        )}
+
         <MapContainer
           center={[32.9, -118.5]}
           zoom={11}
@@ -556,6 +606,8 @@ export default function App({ adminMode = false }) {
           />
 
           <FlyToSpot selected={selected} />
+
+          <FlyToUserLocation trigger={flyToMyLocationTick} userLocation={userLocation} />
 
           <ClickToPlace
             enabled={admin}
@@ -1005,6 +1057,7 @@ export default function App({ adminMode = false }) {
             flex: 1;
             height: 100vh;
             width: 100%;
+            position: relative;
           }
 
           .mobile-menu-btn {
@@ -1286,5 +1339,20 @@ const styles = {
     borderRadius: "10px",
     width: "320px",
     textAlign: "center",
+  },
+  locationHint: {
+    position: "absolute",
+    top: "10px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 1000,
+    background: "rgba(17,17,17,0.85)",
+    color: "white",
+    fontSize: "13px",
+    padding: "8px 14px",
+    borderRadius: "8px",
+    maxWidth: "90%",
+    textAlign: "center",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
   },
 };
