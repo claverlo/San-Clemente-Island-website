@@ -207,6 +207,12 @@ export default function App({ adminMode = false }) {
     setSelected(null);
   };
 
+  const moveSpot = async (spot, event) => {
+    const { lat, lng } = event.target.getLatLng();
+    await api.moveSpot(spot.id, lat, lng);
+    await refreshSpots();
+  };
+
   const deleteGalleryImage = async (spotIndex, photoId) => {
     if (!window.confirm("Delete this photo?")) return;
     await api.rejectPhoto(spots[spotIndex].id, photoId);
@@ -327,7 +333,7 @@ export default function App({ adminMode = false }) {
         {admin && (
           <>
             <p style={{ fontSize: "13px", color: "#ccc" }}>
-              Click the map to place a new spot.
+              Click the map to place a new spot. Drag an existing marker to move it.
             </p>
 
             <input
@@ -424,8 +430,10 @@ export default function App({ adminMode = false }) {
                 }}
                 position={spot.position}
                 icon={makeIcon(spot.mainImage, active, hasPending)}
+                draggable={admin}
                 eventHandlers={{
                   click: () => focusSpot(spot),
+                  dragend: (e) => moveSpot(spot, e),
                 }}
               >
                 <Popup>

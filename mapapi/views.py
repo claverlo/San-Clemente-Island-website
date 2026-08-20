@@ -47,6 +47,20 @@ class SpotListCreateView(APIView):
 class SpotDetailView(APIView):
     permission_classes = [IsAdminSession]
 
+    def patch(self, request, spot_id):
+        spot = get_object_or_404(Spot, id=spot_id)
+        try:
+            lat = float(request.data.get("lat"))
+            lng = float(request.data.get("lng"))
+        except (TypeError, ValueError):
+            return Response({"detail": "lat and lng are required."}, status=400)
+
+        spot.lat = lat
+        spot.lng = lng
+        spot.save(update_fields=["lat", "lng"])
+        data = SpotSerializer(spot, context=spot_context(request)).data
+        return Response(data)
+
     def delete(self, request, spot_id):
         spot = get_object_or_404(Spot, id=spot_id)
         spot.delete()

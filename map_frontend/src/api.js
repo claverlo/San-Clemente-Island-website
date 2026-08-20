@@ -49,6 +49,11 @@ export function deleteSpot(spotId) {
   return request(`/map/api/spots/${spotId}/`, { method: "DELETE" });
 }
 
+export function moveSpot(spotId, lat, lng) {
+  const body = new URLSearchParams({ lat, lng });
+  return request(`/map/api/spots/${spotId}/`, { method: "PATCH", body });
+}
+
 export function uploadPhoto(spotId, file) {
   const body = new FormData();
   body.append("image", file);
