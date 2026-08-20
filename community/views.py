@@ -15,11 +15,9 @@ from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
 
 CONTACTS = [
-    ("Emergency / Fire / Medical", "911", "For immediate life-safety emergencies"),
-    ("Island Security", "(619) 545-7418", "Security desk and non-emergency response"),
-    ("Medical Clinic", "(619) 545-9550", "Routine medical support"),
-    ("MWR Office", "(619) 545-3333", "Programs, recreation, and facilities"),
-    ("Air Operations", "(619) 545-7500", "Flight and passenger information"),
+    ("Command Duty Officer", "(619) 571-9512", "Command Duty Officer (CDO) desk"),
+    ("Security", "(619) 572-6930", "Security desk and non-emergency response"),
+    ("Air Terminal", "(619) 524-9182", "Flight and passenger information"),
 ]
 
 def send_verification_email(request, profile):
