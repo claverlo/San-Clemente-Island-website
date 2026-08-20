@@ -198,13 +198,19 @@ export default function App({ adminMode = false }) {
   const [userLocation, setUserLocation] = useState(null);
   const [heading, setHeading] = useState(null);
   const [compassNeedsPermission, setCompassNeedsPermission] = useState(false);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(true);
+  const [locationTrackingStarted, setLocationTrackingStarted] = useState(false);
+  const locationWatchId = useRef(null);
 
   const admin = adminMode;
 
-  useEffect(() => {
-    if (!navigator.geolocation) return;
+  const startLocationTracking = () => {
+    setShowLocationPrompt(false);
+    setLocationTrackingStarted(true);
 
-    const watchId = navigator.geolocation.watchPosition(
+    if (!navigator.geolocation || locationWatchId.current !== null) return;
+
+    locationWatchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         setUserLocation({
           lat: pos.coords.latitude,
@@ -221,8 +227,14 @@ export default function App({ adminMode = false }) {
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
+  };
 
-    return () => navigator.geolocation.clearWatch(watchId);
+  useEffect(() => {
+    return () => {
+      if (locationWatchId.current !== null) {
+        navigator.geolocation.clearWatch(locationWatchId.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -531,13 +543,6 @@ export default function App({ adminMode = false }) {
       </div>
 
       <div className="map-area">
-        {!userLocation && (
-          <div style={styles.locationHint}>
-            Don&rsquo;t see your location? Refresh the page and click
-            &ldquo;Allow&rdquo; when your browser asks for your location.
-          </div>
-        )}
-
         <MapContainer
           center={[32.9, -118.5]}
           zoom={11}
@@ -866,6 +871,37 @@ export default function App({ adminMode = false }) {
         </div>
       )}
 
+      {showLocationPrompt && !locationTrackingStarted && (
+        <div style={styles.warningOverlay}>
+          <div style={{ ...styles.warningBox, width: "420px", padding: "30px" }}>
+            <div style={{ fontSize: "40px", marginBottom: "8px" }}>📍</div>
+
+            <h5>Show your location on the map?</h5>
+
+            <p style={{ fontSize: "14px", color: "#555" }}>
+              We&rsquo;d like to show you where you are on the island map,
+              live, as a &ldquo;you are here&rdquo; marker. Your browser will
+              then ask you to confirm &mdash; that part comes from your
+              browser, not this site.
+            </p>
+
+            <button
+              className="btn btn-success w-100 mb-2"
+              onClick={startLocationTracking}
+            >
+              Share My Location
+            </button>
+
+            <button
+              className="btn btn-secondary w-100"
+              onClick={() => setShowLocationPrompt(false)}
+            >
+              Not Now
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAdminLogin && (
         <div style={styles.warningOverlay}>
           <div style={styles.warningBox}>
@@ -969,7 +1005,6 @@ export default function App({ adminMode = false }) {
             flex: 1;
             height: 100vh;
             width: 100%;
-            position: relative;
           }
 
           .mobile-menu-btn {
@@ -1251,20 +1286,5 @@ const styles = {
     borderRadius: "10px",
     width: "320px",
     textAlign: "center",
-  },
-  locationHint: {
-    position: "absolute",
-    top: "10px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    zIndex: 1000,
-    background: "rgba(17,17,17,0.85)",
-    color: "white",
-    fontSize: "13px",
-    padding: "8px 14px",
-    borderRadius: "8px",
-    maxWidth: "90%",
-    textAlign: "center",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
   },
 };
