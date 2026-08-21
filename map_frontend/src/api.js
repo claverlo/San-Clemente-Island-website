@@ -71,6 +71,12 @@ export function approvePhoto(spotId, photoId) {
   });
 }
 
+export function reportPhoto(spotId, photoId) {
+  return request(`/map/api/spots/${spotId}/photos/${photoId}/report/`, {
+    method: "POST",
+  });
+}
+
 export function rejectPhoto(spotId, photoId) {
   return request(`/map/api/spots/${spotId}/photos/${photoId}/`, {
     method: "DELETE",

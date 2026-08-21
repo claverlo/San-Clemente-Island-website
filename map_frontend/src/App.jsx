@@ -411,6 +411,17 @@ export default function App({ adminMode = false }) {
     await refreshSpots();
   };
 
+  const reportGalleryImage = async (spotIndex, photoId) => {
+    if (
+      !window.confirm(
+        "Report this photo as inappropriate? It will be sent to admin for review."
+      )
+    )
+      return;
+    await api.reportPhoto(spots[spotIndex].id, photoId);
+    await refreshSpots();
+  };
+
   const deletePendingImage = async (spotIndex, photoId) => {
     if (!window.confirm("Delete this pending photo?")) return;
     await api.rejectPhoto(spots[spotIndex].id, photoId);
@@ -698,6 +709,19 @@ export default function App({ adminMode = false }) {
                                   }}
                                 >
                                   ✕
+                                </button>
+                              )}
+
+                              {!admin && img.type === "gallery" && (
+                                <button
+                                  style={styles.reportImageBtn}
+                                  title="Report inappropriate"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    reportGalleryImage(i, img.id);
+                                  }}
+                                >
+                                  🚩
                                 </button>
                               )}
                             </>
@@ -1259,6 +1283,21 @@ const styles = {
     width: "20px",
     height: "20px",
     lineHeight: "18px",
+    cursor: "pointer",
+    zIndex: 10,
+  },
+  reportImageBtn: {
+    position: "absolute",
+    top: "2px",
+    right: "2px",
+    background: "rgba(0,0,0,0.6)",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    fontSize: "11px",
+    width: "22px",
+    height: "22px",
+    lineHeight: "20px",
     cursor: "pointer",
     zIndex: 10,
   },

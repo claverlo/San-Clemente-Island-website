@@ -1,5 +1,8 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, login as auth_login, logout
+from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -15,6 +18,19 @@ from .serializers import SpotSerializer
 def spot_context(request):
     is_admin = bool(request.user.is_authenticated and request.user.is_staff)
     return {"request": request, "is_admin": is_admin}
+
+
+def notify_admin_of_photo_report(request, spot, reporter):
+    reporter_label = reporter.username if reporter else "an anonymous visitor"
+    admin_url = request.build_absolute_uri(reverse("admin:mapapi_photo_changelist"))
+    send_mail(
+        f"SCI List: map photo reported - {spot.name}",
+        f"{reporter_label} reported a photo at \"{spot.name}\" as inappropriate.\n\n"
+        f"Review it here: {admin_url}",
+        None,
+        [settings.REPORT_ADMIN_EMAIL],
+        fail_silently=True,
+    )
 
 
 class SpotListCreateView(APIView):
@@ -134,6 +150,20 @@ class PhotoApproveView(APIView):
         photo = get_object_or_404(Photo, id=photo_id, spot_id=spot_id)
         photo.status = Photo.STATUS_APPROVED
         photo.save()
+        data = SpotSerializer(photo.spot, context=spot_context(request)).data
+        return Response(data)
+
+
+class PhotoReportView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, spot_id, photo_id):
+        photo = get_object_or_404(Photo, id=photo_id, spot_id=spot_id)
+        if photo.status == Photo.STATUS_APPROVED:
+            photo.status = Photo.STATUS_PENDING
+            photo.save(update_fields=["status"])
+            reporter = request.user if request.user.is_authenticated else None
+            notify_admin_of_photo_report(request, photo.spot, reporter)
         data = SpotSerializer(photo.spot, context=spot_context(request)).data
         return Response(data)
 
