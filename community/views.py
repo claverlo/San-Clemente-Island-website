@@ -68,7 +68,17 @@ def marketplace(request):
     if category: listings = listings.filter(category=category)
     if condition: listings = listings.filter(condition=condition)
     if request.GET.get("available") == "1": listings = listings.filter(is_sold=False)
-    return render(request, "community/marketplace.html", {"listings": listings, "categories": Listing.CATEGORIES, "conditions": Listing.CONDITIONS, "query": query, "selected_category": category, "selected_condition": condition})
+
+    grouped = None
+    if not query and not category and not condition:
+        grouped = []
+        for value, label in Listing.CATEGORIES:
+            category_listings = listings.filter(category=value)
+            total = category_listings.count()
+            if total:
+                grouped.append({"value": value, "label": label, "listings": category_listings[:4], "total": total})
+
+    return render(request, "community/marketplace.html", {"listings": listings, "grouped": grouped, "categories": Listing.CATEGORIES, "conditions": Listing.CONDITIONS, "query": query, "selected_category": category, "selected_condition": condition})
 
 def listing_detail(request, pk):
     if request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser):
