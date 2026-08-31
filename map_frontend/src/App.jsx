@@ -341,6 +341,42 @@ export default function App({ adminMode = false }) {
     refreshSpots();
   }, []);
 
+  const touchStartX = useRef(null);
+
+  const openViewer = (images, index) => {
+    setViewer({ images, index });
+    setZoom(1);
+    setDrag({ x: 0, y: 0 });
+  };
+
+  const goToViewerImage = (delta) => {
+    setViewer((prev) => {
+      if (!prev) return prev;
+      const nextIndex =
+        (prev.index + delta + prev.images.length) % prev.images.length;
+      return { ...prev, index: nextIndex };
+    });
+    setZoom(1);
+    setDrag({ x: 0, y: 0 });
+  };
+
+  useEffect(() => {
+    if (!viewer) return;
+
+    const handleKey = (e) => {
+      if (e.key === "ArrowLeft") goToViewerImage(-1);
+      else if (e.key === "ArrowRight") goToViewerImage(1);
+      else if (e.key === "Escape") {
+        setViewer(null);
+        setZoom(1);
+        setDrag({ x: 0, y: 0 });
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [viewer]);
+
   const openSpotPopup = (spot) => {
     setSelected(spot);
 
@@ -694,9 +730,16 @@ export default function App({ adminMode = false }) {
                                 alt={`${spot.name} ${index}`}
                                 style={styles.galleryImage}
                                 onClick={() => {
-                                  setViewer(img.src);
-                                  setZoom(1);
-                                  setDrag({ x: 0, y: 0 });
+                                  const viewable = allImages.filter(
+                                    (im) => !im.pending
+                                  );
+                                  const viewIndex = viewable.findIndex(
+                                    (im) => im === img
+                                  );
+                                  openViewer(
+                                    viewable.map((im) => im.src),
+                                    viewIndex
+                                  );
                                 }}
                               />
 
@@ -733,9 +776,7 @@ export default function App({ adminMode = false }) {
                                 style={styles.pendingBox}
                                 onClick={() => {
                                   focusSpot(spot);
-                                  setViewer(img.src);
-                                  setZoom(1);
-                                  setDrag({ x: 0, y: 0 });
+                                  openViewer([img.src], 0);
                                 }}
                               >
                                 <div>
@@ -787,16 +828,17 @@ export default function App({ adminMode = false }) {
                       <div className="mt-3">
                         <h6>Pending Approval</h6>
 
-                        {spot.pending.map((img) => (
+                        {spot.pending.map((img, pendingIndex) => (
                           <div key={img.id} className="mb-2">
                             <img
                               src={img.image}
                               alt="Pending"
                               style={styles.pendingPreview}
                               onClick={() => {
-                                setViewer(img.image);
-                                setZoom(1);
-                                setDrag({ x: 0, y: 0 });
+                                openViewer(
+                                  spot.pending.map((p) => p.image),
+                                  pendingIndex
+                                );
                               }}
                             />
 
@@ -906,10 +948,20 @@ export default function App({ adminMode = false }) {
             setZoom((old) => (old === 1 ? 2 : 1));
             setDrag({ x: 0, y: 0 });
           }}
+          onTouchStart={(e) => {
+            touchStartX.current = e.touches[0].clientX;
+          }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+            touchStartX.current = null;
+            if (zoom > 1 || Math.abs(deltaX) < 50) return;
+            goToViewerImage(deltaX > 0 ? -1 : 1);
+          }}
         >
 
           <img
-            src={viewer}
+            src={viewer.images[viewer.index]}
             alt="Full view"
             draggable="false"
             style={{
@@ -921,6 +973,34 @@ export default function App({ adminMode = false }) {
               userSelect: "none",
             }}
           />
+
+          {viewer.images.length > 1 && (
+            <>
+              <button
+                style={styles.viewerNavLeft}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goToViewerImage(-1);
+                }}
+              >
+                ‹
+              </button>
+
+              <button
+                style={styles.viewerNavRight}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goToViewerImage(1);
+                }}
+              >
+                ›
+              </button>
+
+              <div style={styles.viewerCounter}>
+                {viewer.index + 1} / {viewer.images.length}
+              </div>
+            </>
+          )}
 
           <div style={styles.viewerButtons}>
             <button
@@ -1332,6 +1412,49 @@ const styles = {
     transform: "translateX(-50%)",
     display: "flex",
     gap: "8px",
+  },
+  viewerNavLeft: {
+    position: "absolute",
+    top: "50%",
+    left: "12px",
+    transform: "translateY(-50%)",
+    background: "rgba(255,255,255,0.15)",
+    color: "white",
+    border: "none",
+    borderRadius: "50%",
+    width: "48px",
+    height: "48px",
+    fontSize: "28px",
+    lineHeight: "1",
+    cursor: "pointer",
+    zIndex: 2,
+  },
+  viewerNavRight: {
+    position: "absolute",
+    top: "50%",
+    right: "12px",
+    transform: "translateY(-50%)",
+    background: "rgba(255,255,255,0.15)",
+    color: "white",
+    border: "none",
+    borderRadius: "50%",
+    width: "48px",
+    height: "48px",
+    fontSize: "28px",
+    lineHeight: "1",
+    cursor: "pointer",
+    zIndex: 2,
+  },
+  viewerCounter: {
+    position: "absolute",
+    top: "20px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "rgba(0,0,0,0.6)",
+    color: "white",
+    padding: "4px 12px",
+    borderRadius: "999px",
+    fontSize: "13px",
   },
   closeViewer: {
     position: "absolute",
