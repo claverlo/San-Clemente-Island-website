@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
@@ -133,4 +134,28 @@ class ContactMessageAdmin(admin.ModelAdmin):
         self.message_user(request, f"{count} message(s) marked resolved.")
 
 
-admin.site.register([Announcement, Event, ListingImage, SellerMessage])
+class EventAdminForm(forms.ModelForm):
+    date = forms.DateTimeField(
+        widget=forms.DateTimeInput(attrs={"placeholder": "e.g. 2026-10-28 6:00 PM"}),
+        input_formats=[
+            "%Y-%m-%d %I:%M %p",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%m/%d/%Y %I:%M %p",
+            "%m/%d/%Y %H:%M",
+        ],
+        help_text="Type the date and time, e.g. 2026-10-28 6:00 PM",
+    )
+
+    class Meta:
+        model = Event
+        fields = "__all__"
+
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    form = EventAdminForm
+    list_display = ("title", "date", "category", "location")
+
+
+admin.site.register([Announcement, ListingImage, SellerMessage])

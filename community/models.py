@@ -112,7 +112,7 @@ class Event(models.Model):
     description = models.TextField()
     date = models.DateTimeField()
     location = models.CharField(max_length=120)
-    category = models.CharField(max_length=80, default="MWR Activity")
+    category = models.CharField(max_length=80, default="MWR Activity", blank=True)
     objects = EventQuerySet.as_manager()
 
     class Meta: ordering = ["date"]
