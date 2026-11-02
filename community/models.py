@@ -162,11 +162,39 @@ class SellerMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self): return f"Message about {self.listing}"
 
+class ChatMessage(models.Model):
+    PHOTO_LIFETIME = timedelta(days=7)
+    MODERATION_STATUS_CHOICES = Listing.MODERATION_STATUS_CHOICES
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="chat_messages")
+    body = models.TextField(blank=True, max_length=1000)
+    image = models.ImageField(upload_to="chat/", blank=True)
+    photo_expired = models.BooleanField(default=False)
+    moderation_status = models.CharField(max_length=20, choices=MODERATION_STATUS_CHOICES, default="approved")
+    moderation_notes = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta: ordering = ["created_at"]
+
+    def __str__(self): return f"{self.user.username}: {self.body[:40] or 'photo'}"
+
+    @classmethod
+    def purge_old_photos(cls):
+        """Delete photo files older than PHOTO_LIFETIME but keep the text of the message."""
+        cutoff = timezone.now() - cls.PHOTO_LIFETIME
+        purged = 0
+        for message in cls.objects.filter(created_at__lt=cutoff).exclude(image=""):
+            message.image.delete(save=False)
+            message.photo_expired = True
+            message.save(update_fields=["image", "photo_expired"])
+            purged += 1
+        return purged
+
 class ContentReport(models.Model):
     STATUS_CHOICES = [("open", "Open"), ("resolved", "Resolved")]
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="content_reports", null=True, blank=True)
     listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name="content_reports", null=True, blank=True)
     lost_found = models.ForeignKey(LostFound, on_delete=models.CASCADE, related_name="content_reports", null=True, blank=True)
+    chat_message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name="content_reports", null=True, blank=True)
     reason = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -176,10 +204,11 @@ class ContentReport(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["reporter", "listing"], name="unique_listing_report_per_user", condition=models.Q(reporter__isnull=False)),
             models.UniqueConstraint(fields=["reporter", "lost_found"], name="unique_lostfound_report_per_user", condition=models.Q(reporter__isnull=False)),
+            models.UniqueConstraint(fields=["reporter", "chat_message"], name="unique_chat_report_per_user", condition=models.Q(reporter__isnull=False)),
         ]
 
     def __str__(self):
-        target = self.listing.title if self.listing else str(self.lost_found)
+        target = self.listing.title if self.listing else str(self.lost_found or self.chat_message)
         who = self.reporter.username if self.reporter else "anonymous"
         return f"Report by {who} on {target}"
 

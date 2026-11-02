@@ -38,6 +38,7 @@ TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_IMAGE_MODERATION_MODEL = os.environ.get("OPENAI_IMAGE_MODERATION_MODEL", "gpt-4o-mini")
+OPENAI_CHAT_SEARCH_MODEL = os.environ.get("OPENAI_CHAT_SEARCH_MODEL", "gpt-4o-mini")
 REPORT_ADMIN_EMAIL = os.environ.get("REPORT_ADMIN_EMAIL", "trdview573@gmail.com")
 
 # Island map (mapapi app + React frontend under map_frontend/), mounted at /map/
