@@ -19,5 +19,7 @@ urlpatterns = [
     path("contact/", views.contact_admin, name="contact_admin"),
     path("chat/", views.chat, name="chat"), path("chat/updates/", views.chat_updates, name="chat_updates"),
     path("chat/<int:pk>/delete/", views.chat_delete, name="chat_delete"),
+    path("manifest.webmanifest", views.app_manifest, name="app_manifest"), path("sw.js", views.service_worker, name="service_worker"),
+    path("offline/", views.offline, name="offline"),
     path("chat/<int:pk>/report/", views.report_chat_message, name="report_chat_message"),
 ]
