@@ -455,3 +455,23 @@ class ChatTests(TestCase):
 
     def test_search_terms_drop_filler_words(self):
         self.assertEqual(search_terms("Hey, does anybody know the store hours today?"), ["store", "hours"])
+
+
+class InstallableAppTests(TestCase):
+    def test_manifest_describes_sci_connect_app(self):
+        response = self.client.get(reverse("app_manifest"))
+        self.assertEqual(response["Content-Type"], "application/manifest+json")
+        manifest = response.json()
+        self.assertEqual(manifest["name"], "SCI Connect")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertTrue(any(icon["purpose"] == "maskable" for icon in manifest["icons"]))
+
+    def test_service_worker_is_served_from_site_root_and_not_cached(self):
+        response = self.client.get("/sw.js")
+        self.assertEqual(response["Content-Type"], "application/javascript")
+        self.assertEqual(response["Cache-Control"], "no-cache")
+        self.assertContains(response, reverse("offline"))
+
+    def test_pages_link_the_manifest_and_offline_page_loads(self):
+        self.assertContains(self.client.get(reverse("home")), reverse("app_manifest"))
+        self.assertContains(self.client.get(reverse("offline")), "No signal right now")

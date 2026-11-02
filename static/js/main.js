@@ -357,3 +357,45 @@ if (chatPanel) {
   });
   if (new URLSearchParams(window.location.search).get('chat') === '1') openChat();
 }
+
+// Installable app (SCI Connect): register the worker and offer "Add to Home Screen".
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+
+const appBanner = document.querySelector('[data-app-banner]');
+if (appBanner) {
+  const dismissKey = 'sciAppBannerDismissed';
+  const installButton = appBanner.querySelector('[data-app-install]');
+  const bannerText = appBanner.querySelector('[data-app-banner-text]');
+  const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  let dismissed = false;
+  try { dismissed = window.localStorage.getItem(dismissKey) === '1'; } catch (error) { dismissed = false; }
+  let installPrompt = null;
+
+  if (!isInstalled && !dismissed) {
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      installPrompt = event;
+      installButton.hidden = false;
+      appBanner.hidden = false;
+    });
+    if (/iphone|ipad|ipod/i.test(window.navigator.userAgent)) {
+      bannerText.innerHTML = 'Tap the Share button <i class="bi bi-box-arrow-up"></i>, then <strong>Add to Home Screen</strong>.';
+      appBanner.hidden = false;
+    }
+  }
+
+  installButton.addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    appBanner.hidden = true;
+  });
+  appBanner.querySelector('[data-app-dismiss]').addEventListener('click', () => {
+    appBanner.hidden = true;
+    try { window.localStorage.setItem(dismissKey, '1'); } catch (error) { /* banner just comes back next visit */ }
+  });
+  window.addEventListener('appinstalled', () => { appBanner.hidden = true; });
+}

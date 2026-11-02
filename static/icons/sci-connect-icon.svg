@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#071f3d"/>
+  <circle cx="256" cy="222" r="170" fill="#0d3158"/>
+  <!-- ears -->
+  <path d="M150 196 Q128 120 150 70 Q200 92 232 142 Z" fill="#e0823f" stroke="#5a2f12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M362 196 Q384 120 362 70 Q312 92 280 142 Z" fill="#e0823f" stroke="#5a2f12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M162 170 Q152 124 164 96 Q194 112 212 144 Z" fill="#3a2a22"/>
+  <path d="M350 170 Q360 124 348 96 Q318 112 300 144 Z" fill="#3a2a22"/>
+  <!-- head -->
+  <path d="M256 128 C344 128 384 178 380 232 C376 290 326 340 256 344 C186 340 136 290 132 232 C128 178 168 128 256 128 Z" fill="#e0823f" stroke="#5a2f12" stroke-width="7"/>
+  <!-- gray island-fox cap -->
+  <path d="M176 156 C206 136 306 136 336 156 C318 176 290 186 256 196 C222 186 194 176 176 156 Z" fill="#9aa4ad"/>
+  <!-- white cheeks and muzzle -->
+  <path d="M136 246 C164 262 200 262 230 250 C240 270 248 284 256 290 C264 284 272 270 282 250 C312 262 348 262 376 246 C364 300 316 340 256 342 C196 340 148 300 136 246 Z" fill="#fbf6ec"/>
+  <!-- big eyes -->
+  <circle cx="204" cy="222" r="27" fill="#1d1a19"/>
+  <circle cx="308" cy="222" r="27" fill="#1d1a19"/>
+  <circle cx="214" cy="211" r="10" fill="#fff"/>
+  <circle cx="318" cy="211" r="10" fill="#fff"/>
+  <circle cx="196" cy="234" r="4.5" fill="#fff"/>
+  <circle cx="300" cy="234" r="4.5" fill="#fff"/>
+  <!-- rosy cheeks -->
+  <ellipse cx="170" cy="268" rx="20" ry="12" fill="#f5a3a3" opacity=".8"/>
+  <ellipse cx="342" cy="268" rx="20" ry="12" fill="#f5a3a3" opacity=".8"/>
+  <!-- nose and smile -->
+  <path d="M238 272 Q256 262 274 272 Q270 290 256 294 Q242 290 238 272 Z" fill="#1d1a19"/>
+  <ellipse cx="250" cy="273" rx="6" ry="3" fill="#5b5450"/>
+  <path d="M256 294 L256 304 M256 304 Q244 318 232 308 M256 304 Q268 318 280 308" stroke="#1d1a19" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- name -->
+  <text x="256" y="458" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="104" letter-spacing="10" fill="#f4bd32">SCI</text>
+</svg>

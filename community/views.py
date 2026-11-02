@@ -288,6 +288,16 @@ def report_lost_found(request, pk):
         messages.success(request, "Thanks. Your report was sent to admin for review.")
     return redirect("lost_found")
 
+def app_manifest(request):
+    return render(request, "pwa/manifest.webmanifest", content_type="application/manifest+json")
+
+def service_worker(request):
+    response = render(request, "pwa/sw.js", content_type="application/javascript")
+    response["Cache-Control"] = "no-cache"
+    return response
+
+def offline(request): return render(request, "pwa/offline.html")
+
 def visible_chat_messages(user):
     messages_qs = ChatMessage.objects.select_related("user")
     if user.is_authenticated and (user.is_staff or user.is_superuser):
