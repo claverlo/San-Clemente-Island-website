@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from django.utils import timezone
-from .models import Announcement, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile, SellerMessage
+from .models import Announcement, ChatMessage, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile, SellerMessage
 
 
 class UserListingInline(admin.TabularInline):
@@ -88,16 +88,16 @@ class LostFoundAdmin(admin.ModelAdmin):
 
 @admin.register(ContentReport)
 class ContentReportAdmin(admin.ModelAdmin):
-    list_display = ("id", "reporter", "listing", "lost_found", "reason", "status", "created_at")
+    list_display = ("id", "reporter", "listing", "lost_found", "chat_message", "reason", "status", "created_at")
     list_filter = ("status", "created_at")
-    search_fields = ("reporter__username", "reason", "listing__title", "lost_found__item")
+    search_fields = ("reporter__username", "reason", "listing__title", "lost_found__item", "chat_message__body")
     actions = ("approve_reported_post", "reject_reported_post")
 
     @admin.action(description="Put post back on the website (approve)")
     def approve_reported_post(self, request, queryset):
         count = 0
         for report in queryset:
-            target = report.listing or report.lost_found
+            target = report.listing or report.lost_found or report.chat_message
             if target:
                 target.moderation_status = "approved"
                 target.moderation_notes = ""
@@ -111,7 +111,7 @@ class ContentReportAdmin(admin.ModelAdmin):
     def reject_reported_post(self, request, queryset):
         count = 0
         for report in queryset:
-            target = report.listing or report.lost_found
+            target = report.listing or report.lost_found or report.chat_message
             if target:
                 target.moderation_status = "rejected"
                 target.save(update_fields=["moderation_status"])
@@ -119,6 +119,24 @@ class ContentReportAdmin(admin.ModelAdmin):
             report.status = "resolved"
             report.save(update_fields=["status"])
         self.message_user(request, f"{count} post(s) declined and kept off the website.")
+
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "user", "moderation_status", "created_at")
+    list_filter = ("moderation_status", "created_at")
+    search_fields = ("body", "user__username")
+    actions = ("approve_messages", "reject_messages")
+
+    @admin.action(description="Approve selected messages")
+    def approve_messages(self, request, queryset):
+        count = queryset.update(moderation_status="approved", moderation_notes="")
+        self.message_user(request, f"{count} message(s) approved.")
+
+    @admin.action(description="Reject selected messages")
+    def reject_messages(self, request, queryset):
+        count = queryset.update(moderation_status="rejected")
+        self.message_user(request, f"{count} message(s) rejected.")
 
 
 @admin.register(ContactMessage)

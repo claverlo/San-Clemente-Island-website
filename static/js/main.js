@@ -331,3 +331,29 @@ if (passwordField && passwordChecklist && typeof COMMON_PASSWORDS !== 'undefined
   });
   updateChecklist();
 }
+
+const chatPanel = document.querySelector('[data-chat-panel]');
+if (chatPanel) {
+  const chatFrame = chatPanel.querySelector('iframe');
+  const chatFab = document.querySelector('.chat-fab');
+  const openChat = () => {
+    if (!chatFrame.src) chatFrame.src = chatFrame.dataset.src;
+    chatPanel.hidden = false;
+    chatFab.hidden = true;
+    document.body.classList.add('chat-open');
+    bootstrap.Collapse.getInstance(document.getElementById('nav'))?.hide();
+  };
+  const closeChat = () => {
+    chatPanel.hidden = true;
+    chatFab.hidden = false;
+    document.body.classList.remove('chat-open');
+  };
+  document.querySelectorAll('[data-chat-open]').forEach((link) => link.addEventListener('click', (event) => {
+    event.preventDefault();
+    openChat();
+  }));
+  window.addEventListener('message', (event) => {
+    if (event.origin === window.location.origin && event.data === 'sci-chat-close') closeChat();
+  });
+  if (new URLSearchParams(window.location.search).get('chat') === '1') openChat();
+}

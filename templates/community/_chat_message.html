@@ -1,0 +1,29 @@
+<article class="chat-msg{% if message.user == user %} mine{% endif %}" id="m{{ message.pk }}">
+	<div class="chat-meta">
+		<strong>{{ message.user.username }}</strong>
+		<time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"M j, g:i A" }}</time>
+		{% if message.moderation_status != 'approved' %}<span class="chat-tag">Under review</span>{% endif %}
+	</div>
+	{% if message.body %}<p class="chat-body">{{ message.body|linebreaksbr }}</p>{% endif %}
+	{% if message.image %}
+	<button type="button" class="chat-photo" data-full="{{ message.image.url }}" aria-label="Enlarge photo from {{ message.user.username }}">
+		<img src="{{ message.image.url }}" alt="Photo from {{ message.user.username }}" loading="lazy">
+	</button>
+	{% elif message.photo_expired %}
+	<p class="chat-expired"><i class="bi bi-image"></i> Photo removed after 7 days</p>
+	{% endif %}
+	<div class="chat-actions">
+		{% if message.user == user or user.is_staff or user.is_superuser %}
+		<form method="post" action="{% url 'chat_delete' message.pk %}" onsubmit="return confirm('Delete this message?')">{% csrf_token %}<button class="chat-link">Delete</button></form>
+		{% endif %}
+		{% if message.user != user %}
+		<details class="chat-report">
+			<summary class="chat-link">Report</summary>
+			<form method="post" action="{% url 'report_chat_message' message.pk %}">{% csrf_token %}
+				<input type="text" name="reason" maxlength="255" placeholder="What's wrong? (optional)" aria-label="Reason for report">
+				<button class="chat-link danger">Send report</button>
+			</form>
+		</details>
+		{% endif %}
+	</div>
+</article>

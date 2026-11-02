@@ -1,11 +1,14 @@
+import tempfile
 from datetime import timedelta
+from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from .models import ContentReport, Event, Listing, ListingImage, LostFound, Profile
+from .chat import search_terms
+from .models import ChatMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile
 
 class CommunityTests(TestCase):
     def setUp(self):
@@ -347,3 +350,108 @@ class CommunityTests(TestCase):
         report.refresh_from_db()
         self.assertEqual(report.moderation_status, "pending")
         self.assertTrue(ContentReport.objects.filter(reporter=reporter, lost_found=report).exists())
+
+
+def make_photo(name="hours.png", size=(3000, 2000)):
+    from io import BytesIO
+    from PIL import Image
+    buffer = BytesIO()
+    Image.new("RGB", size, "blue").save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(), OPENAI_API_KEY="")
+class ChatTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("sailor", password="testpass123")
+        self.other = User.objects.create_user("diver", password="testpass123")
+
+    def test_anyone_can_read_but_must_log_in_to_post(self):
+        ChatMessage.objects.create(user=self.other, body="Hello island")
+        response = self.client.get(reverse("chat"))
+        self.assertContains(response, "Hello island")
+        self.assertContains(response, "Log in")
+        self.client.post(reverse("chat"), {"body": "sneaky"})
+        self.assertFalse(ChatMessage.objects.filter(body="sneaky").exists())
+
+    def test_chat_page_can_be_shown_in_the_site_panel(self):
+        self.assertEqual(self.client.get(reverse("chat"))["X-Frame-Options"], "SAMEORIGIN")
+
+    def test_member_posts_text_and_photo_is_shrunk(self):
+        self.client.login(username="sailor", password="testpass123")
+        response = self.client.post(reverse("chat"), {"body": "Store is open 8 to 3 today", "image": make_photo()})
+        self.assertEqual(response.status_code, 302)
+        message = ChatMessage.objects.get(user=self.user)
+        self.assertEqual(message.moderation_status, "approved")
+        self.assertTrue(message.image.name.endswith(".jpg"))
+        from PIL import Image
+        with Image.open(message.image.path) as image:
+            self.assertLessEqual(max(image.size), 1600)
+
+    def test_empty_message_is_rejected(self):
+        self.client.login(username="sailor", password="testpass123")
+        response = self.client.post(reverse("chat"), {"body": "   "})
+        self.assertContains(response, "Type a message or add a photo.")
+        self.assertFalse(ChatMessage.objects.exists())
+
+    def test_photos_older_than_seven_days_are_removed_but_text_stays(self):
+        old = ChatMessage.objects.create(user=self.user, body="Old hours", image=make_photo("old.png", (10, 10)))
+        ChatMessage.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=8))
+        fresh = ChatMessage.objects.create(user=self.user, body="New hours", image=make_photo("new.png", (10, 10)))
+        self.client.get(reverse("chat"))
+        old.refresh_from_db(); fresh.refresh_from_db()
+        self.assertFalse(old.image)
+        self.assertTrue(old.photo_expired)
+        self.assertEqual(old.body, "Old hours")
+        self.assertTrue(fresh.image)
+
+    def test_search_shows_matching_messages_without_ai(self):
+        ChatMessage.objects.create(user=self.other, body="Anyone want to go fishing?")
+        ChatMessage.objects.create(user=self.other, body="The store hours today are 0800 to 1500")
+        response = self.client.get(reverse("chat"), {"q": "does anybody know the store hours today"})
+        self.assertContains(response, "0800 to 1500")
+        self.assertNotContains(response, "fishing")
+        self.assertContains(response, "1 related message")
+
+    def test_search_shows_ai_answer_crediting_the_poster(self):
+        hours = ChatMessage.objects.create(user=self.other, body="Store is open 8 to 3 today")
+        with patch("community.views.ai_answer", return_value=("According to diver, the store is open 8 to 3.", [hours.pk])) as mocked:
+            response = self.client.get(reverse("chat"), {"q": "store hours"})
+        self.assertContains(response, "According to diver, the store is open 8 to 3.")
+        self.assertIn(hours, mocked.call_args.args[1])
+
+    def test_reported_message_is_hidden_until_admin_review(self):
+        message = ChatMessage.objects.create(user=self.other, body="Rude message")
+        self.client.login(username="sailor", password="testpass123")
+        self.client.post(reverse("report_chat_message", args=[message.pk]), {"reason": "rude"})
+        message.refresh_from_db()
+        self.assertEqual(message.moderation_status, "pending")
+        self.assertTrue(ContentReport.objects.filter(reporter=self.user, chat_message=message).exists())
+        self.assertNotContains(self.client.get(reverse("chat")), "Rude message")
+
+    def test_updates_returns_only_new_visible_messages(self):
+        first = ChatMessage.objects.create(user=self.other, body="First")
+        ChatMessage.objects.create(user=self.other, body="Second")
+        ChatMessage.objects.create(user=self.other, body="Hidden", moderation_status="pending")
+        data = self.client.get(reverse("chat_updates"), {"after": first.pk}).json()
+        self.assertIn("Second", data["html"])
+        self.assertNotIn("First", data["html"])
+        self.assertNotIn("Hidden", data["html"])
+
+    def test_only_author_can_delete_message(self):
+        message = ChatMessage.objects.create(user=self.other, body="Mine")
+        self.client.login(username="sailor", password="testpass123")
+        self.client.post(reverse("chat_delete", args=[message.pk]))
+        self.assertTrue(ChatMessage.objects.filter(pk=message.pk).exists())
+        self.client.login(username="diver", password="testpass123")
+        self.client.post(reverse("chat_delete", args=[message.pk]))
+        self.assertFalse(ChatMessage.objects.filter(pk=message.pk).exists())
+
+    def test_search_includes_replies_that_dont_repeat_the_question(self):
+        ChatMessage.objects.create(user=self.user, body="Anybody know the store hours today?")
+        ChatMessage.objects.create(user=self.other, body="Open 0800 to 1500")
+        response = self.client.get(reverse("chat"), {"q": "store hours"})
+        self.assertContains(response, "Open 0800 to 1500")
+
+    def test_search_terms_drop_filler_words(self):
+        self.assertEqual(search_terms("Hey, does anybody know the store hours today?"), ["store", "hours"])

@@ -836,3 +836,66 @@ svg {
         font-size: clamp(2.6rem, 2rem + 0.8vw, 3.4rem);
     }
 }
+
+/* Island Chat: floating button and pop-up panel (full screen on phones) */
+.chat-fab {
+    position:fixed;
+    right:20px;
+    bottom:20px;
+    z-index:1040;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:12px 18px;
+    border-radius:999px;
+    background:var(--navy);
+    color:#fff;
+    font-weight:700;
+    text-decoration:none;
+    box-shadow:0 6px 18px rgba(7,31,61,.3)
+}
+.chat-fab[hidden] {
+    display:none
+}
+.chat-fab:hover {
+    color:var(--gold)
+}
+.chat-fab i {
+    font-size:1.2rem
+}
+.chat-panel {
+    position:fixed;
+    right:20px;
+    bottom:20px;
+    z-index:1045;
+    width:380px;
+    height:min(600px,calc(100vh - 40px));
+    border-radius:16px;
+    overflow:hidden;
+    background:#fff;
+    box-shadow:0 12px 40px rgba(7,31,61,.35)
+}
+.chat-panel[hidden] {
+    display:none
+}
+.chat-panel iframe {
+    display:block;
+    width:100%;
+    height:100%;
+    border:0
+}
+@media (max-width:575.98px) {
+    .chat-fab {
+        right:16px;
+        bottom:16px
+    }
+    .chat-panel {
+        inset:0;
+        width:auto;
+        height:100%;
+        border-radius:0
+    }
+    body.chat-open {
+        overflow:hidden
+    }
+}

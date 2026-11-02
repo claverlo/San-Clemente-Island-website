@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import User
-from .models import ContactMessage, Listing, LostFound, Profile
+from .models import ChatMessage, ContactMessage, Listing, LostFound, Profile
 
 def normalize_phone(value):
     digits = "".join(character for character in value if character.isdigit())
@@ -250,3 +250,27 @@ class ContactMessageForm(BootstrapMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_styles()
+
+class ChatMessageForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = ChatMessage
+        fields = ["body", "image"]
+        labels = {"body": "Message", "image": "Photo"}
+        widgets = {"body": forms.Textarea(attrs={"rows": 2, "placeholder": "Ask the island something, or share what you know...", "maxlength": 1000})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.apply_styles()
+        self.fields["image"].widget = forms.FileInput(attrs={"class": "form-control", "accept": "image/*"})
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if image and image.size > 10 * 1024 * 1024:
+            raise forms.ValidationError("Photos must be 10 MB or smaller.")
+        return image
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not (cleaned_data.get("body") or "").strip() and not cleaned_data.get("image"):
+            raise forms.ValidationError("Type a message or add a photo.")
+        return cleaned_data

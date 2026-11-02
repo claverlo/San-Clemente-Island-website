@@ -1,0 +1,64 @@
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Island Chat | SCI List</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/chat.css' %}?v=20261102-1"></head>
+<body class="chat-page">
+<header class="chat-head">
+	<div>
+		<h1>Island Chat</h1>
+		<p>Ask the island. Share what you know.</p>
+	</div>
+	<a class="chat-close" href="{% url 'home' %}" data-chat-close aria-label="Close chat"><i class="bi bi-x-lg"></i></a>
+</header>
+
+<form method="get" class="chat-search" data-chat-search>
+	<i class="bi bi-search"></i>
+	<input type="search" name="q" value="{{ query }}" placeholder="Search, e.g. store hours today" aria-label="Search the chat">
+	<button type="submit">Ask</button>
+</form>
+
+{% if messages %}{% for message in messages %}<div class="chat-alert">{{ message }}</div>{% endfor %}{% endif %}
+
+<div class="chat-log" data-chat-log data-updates-url="{% url 'chat_updates' %}" data-last-id="{{ last_id }}"{% if not query %} data-live{% endif %}>
+	{% if query %}
+	<div class="chat-answer">
+		<div class="chat-answer-label"><i class="bi bi-stars"></i> Answer</div>
+		{% if answer %}
+		<p>{{ answer }}</p>
+		{% elif chat_messages %}
+		<p>Here's what people said about that. Check the newest messages below.</p>
+		{% else %}
+		<p>Nobody in the chat has talked about that yet. Post the question below and someone may know.</p>
+		{% endif %}
+		<a href="{% url 'chat' %}" class="chat-link">Back to the chat</a>
+	</div>
+	{% if chat_messages %}<p class="chat-count">{{ chat_messages|length }} related message{{ chat_messages|length|pluralize }}, newest first</p>{% endif %}
+	{% else %}
+	{% if not chat_messages %}<p class="chat-empty">No messages yet. Be the first to say hi!</p>{% endif %}
+	{% endif %}
+	{% for message in chat_messages %}{% include 'community/_chat_message.html' %}{% endfor %}
+	<div id="chat-bottom"></div>
+</div>
+
+{% if user.is_authenticated %}
+<form method="post" enctype="multipart/form-data" class="chat-compose" data-chat-compose>
+	{% csrf_token %}
+	{% if form.errors %}<div class="chat-alert error">{% for error in form.non_field_errors %}{{ error }} {% endfor %}{% for field in form %}{% for error in field.errors %}{{ error }} {% endfor %}{% endfor %}</div>{% endif %}
+	<div class="chat-photo-picked" data-photo-picked hidden><i class="bi bi-image"></i> <span></span> <button type="button" class="chat-link" data-photo-clear>Remove</button></div>
+	<div class="chat-compose-row">
+		<label class="chat-icon-btn" aria-label="Add a photo"><i class="bi bi-camera"></i>{{ form.image }}</label>
+		<textarea name="body" rows="1" maxlength="1000" placeholder="Message the island..." aria-label="Message">{{ form.body.value|default:'' }}</textarea>
+		<button class="chat-send" type="submit" aria-label="Send"><i class="bi bi-send-fill"></i></button>
+	</div>
+</form>
+{% else %}
+<div class="chat-compose signed-out"><a href="{% url 'login' %}?next=/%3Fchat%3D1" target="_top">Log in</a> to post in the chat.</div>
+{% endif %}
+
+<div class="chat-lightbox" data-lightbox hidden role="dialog" aria-modal="true" aria-label="Enlarged photo">
+	<button type="button" class="chat-close" aria-label="Close photo"><i class="bi bi-x-lg"></i></button>
+	<img alt="">
+</div>
+<script src="{% static 'js/chat.js' %}?v=20261102-1"></script>
+</body></html>

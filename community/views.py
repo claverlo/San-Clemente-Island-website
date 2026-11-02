@@ -4,13 +4,16 @@ from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.db.models import Q
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from random import randint
-from .forms import ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm
-from .models import Announcement, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile
+from .chat import ai_answer, matching_messages, shrink_photo, with_replies
+from .forms import ChatMessageForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm
+from .models import Announcement, ChatMessage, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile
 from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
 
@@ -284,6 +287,99 @@ def report_lost_found(request, pk):
         notify_admin_of_report(request, item.item, reporter, reason)
         messages.success(request, "Thanks. Your report was sent to admin for review.")
     return redirect("lost_found")
+
+def visible_chat_messages(user):
+    messages_qs = ChatMessage.objects.select_related("user")
+    if user.is_authenticated and (user.is_staff or user.is_superuser):
+        return messages_qs
+    if user.is_authenticated:
+        return messages_qs.filter(Q(moderation_status="approved") | Q(user=user))
+    return messages_qs.filter(moderation_status="approved")
+
+@xframe_options_sameorigin
+def chat(request):
+    ChatMessage.purge_old_photos()
+    form = ChatMessageForm(request.POST or None, request.FILES or None)
+    if request.method == "POST":
+        if not request.user.is_authenticated: messages.info(request, "Please log in to post in the chat."); return redirect("login")
+        if form.is_valid():
+            chat_message = form.save(commit=False)
+            chat_message.user = request.user
+            image = form.cleaned_data.get("image")
+            status, reason = run_moderation([chat_message.body], [image])
+            chat_message.moderation_status = "approved" if status == "approved" else "pending"
+            chat_message.moderation_notes = reason
+            if image:
+                chat_message.image = shrink_photo(image)
+            chat_message.save()
+            if chat_message.moderation_status != "approved":
+                messages.success(request, "Your message was sent to admin for review before others can see it.")
+            return redirect(reverse("chat") + "#chat-bottom")
+
+    visible = visible_chat_messages(request.user)
+    query = request.GET.get("q", "").strip()[:200]
+    answer, cited = None, []
+    if query:
+        chat_messages = with_replies(visible, list(matching_messages(visible, query).order_by("-created_at")[:15]))[:40]
+        recent_photos = list(visible.filter(moderation_status="approved", created_at__gte=timezone.now() - ChatMessage.PHOTO_LIFETIME).exclude(image="").order_by("-created_at")[:4])
+        answer, cited_ids = ai_answer(query, chat_messages, recent_photos)
+        by_id = {m.pk: m for m in chat_messages + recent_photos}
+        cited = [by_id[i] for i in cited_ids if i in by_id]
+        chat_messages += [m for m in cited if m not in chat_messages]
+        chat_messages.sort(key=lambda m: m.created_at, reverse=True)
+    else:
+        chat_messages = list(visible.order_by("-created_at")[:100])[::-1]
+    return render(request, "community/chat.html", {
+        "form": form,
+        "chat_messages": chat_messages,
+        "query": query,
+        "answer": answer,
+        "cited": cited,
+        "last_id": max((m.pk for m in chat_messages), default=0),
+    })
+
+def chat_updates(request):
+    try:
+        after = int(request.GET.get("after", 0))
+    except ValueError:
+        after = 0
+    new_messages = list(visible_chat_messages(request.user).filter(pk__gt=after).order_by("created_at")[:50])
+    html = "".join(render_to_string("community/_chat_message.html", {"message": m}, request=request) for m in new_messages)
+    return JsonResponse({"html": html, "last_id": new_messages[-1].pk if new_messages else after})
+
+@login_required
+def chat_delete(request, pk):
+    chat_message = get_object_or_404(ChatMessage, pk=pk)
+    if chat_message.user != request.user and not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "You can only delete your own messages.")
+    elif request.method == "POST":
+        chat_message.image.delete(save=False)
+        chat_message.delete()
+        messages.success(request, "Message deleted.")
+    return redirect("chat")
+
+def report_chat_message(request, pk):
+    chat_message = get_object_or_404(ChatMessage, pk=pk)
+    if request.method == "POST":
+        reason = request.POST.get("reason", "").strip()[:255]
+        reporter = request.user if request.user.is_authenticated else None
+        if reporter:
+            report, created = ContentReport.objects.get_or_create(
+                reporter=reporter,
+                chat_message=chat_message,
+                defaults={"reason": reason},
+            )
+            if not created and reason:
+                report.reason = reason
+                report.save(update_fields=["reason"])
+        else:
+            ContentReport.objects.create(chat_message=chat_message, reason=reason)
+        chat_message.moderation_status = "pending"
+        chat_message.moderation_notes = "Flagged by a community report."
+        chat_message.save(update_fields=["moderation_status", "moderation_notes"])
+        notify_admin_of_report(request, f"chat message by {chat_message.user.username}", reporter, reason)
+        messages.success(request, "Thanks. Your report was sent to admin for review.")
+    return redirect("chat")
 
 def register(request):
     form = RegistrationForm(request.POST or None)

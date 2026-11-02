@@ -17,4 +17,7 @@ urlpatterns = [
     path("phone/send-code/", views.send_phone_verification, name="send_phone_verification"),
     path("phone/verify/", views.verify_phone, name="verify_phone"),
     path("contact/", views.contact_admin, name="contact_admin"),
+    path("chat/", views.chat, name="chat"), path("chat/updates/", views.chat_updates, name="chat_updates"),
+    path("chat/<int:pk>/delete/", views.chat_delete, name="chat_delete"),
+    path("chat/<int:pk>/report/", views.report_chat_message, name="report_chat_message"),
 ]
