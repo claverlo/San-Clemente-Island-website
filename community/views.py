@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.db.models import Q
@@ -12,8 +12,9 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from random import randint
 from .chat import ai_answer, matching_messages, shrink_photo, with_replies
-from .forms import ChatMessageForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm
-from .models import Announcement, ChatMessage, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile
+from .forms import AlertSettingsForm, ChatMessageForm, DeleteAccountForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm
+from .models import Announcement, ChatMessage, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile, LOST_FOUND_ALERT
+from .notifications import notify_subscribers
 from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
 
@@ -35,6 +36,14 @@ def send_verification_email(request, profile):
         fail_silently=False,
     )
     return verification_url
+
+def needs_verified_email(request):
+    """Return a redirect for signed-in members who haven't verified their email yet, else None."""
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    if profile.can_post:
+        return None
+    messages.error(request, "Please verify your email before posting. Check your inbox for the link, or resend it below.")
+    return redirect("dashboard")
 
 def run_moderation(text_values, files):
     status, reason = moderate_text_fields(*text_values)
@@ -94,6 +103,7 @@ def listing_detail(request, pk):
 
 @login_required
 def listing_create(request):
+    if blocked := needs_verified_email(request): return blocked
     profile, _ = Profile.objects.get_or_create(user=request.user)
     initial = {}
     if request.method == "GET":
@@ -109,6 +119,7 @@ def listing_create(request):
         for photo in form.cleaned_data["photos"]:
             ListingImage.objects.create(listing=listing, image=photo)
         if status == "approved":
+            notify_subscribers(request, listing.category, listing.title, listing.get_absolute_url(), request.user)
             messages.success(request, "Listing published successfully.")
         else:
             messages.success(request, "Listing submitted and sent to admin for review.")
@@ -179,6 +190,7 @@ def lost_found(request):
     if request.method == "POST":
         show_post_form = True
         if not request.user.is_authenticated: messages.info(request, "Please log in to post an item."); return redirect("login")
+        if blocked := needs_verified_email(request): return blocked
         if form.is_valid():
             item = form.save(commit=False)
             item.user = request.user
@@ -190,6 +202,7 @@ def lost_found(request):
             item.moderation_notes = reason
             item.save()
             if status == "approved":
+                notify_subscribers(request, LOST_FOUND_ALERT, f"{item.kind}: {item.item}", reverse("lost_found"), request.user)
                 messages.success(request, "Post added.")
             else:
                 messages.success(request, "Post submitted and sent to admin for review.")
@@ -312,6 +325,9 @@ def chat(request):
     form = ChatMessageForm(request.POST or None, request.FILES or None)
     if request.method == "POST":
         if not request.user.is_authenticated: messages.info(request, "Please log in to post in the chat."); return redirect("login")
+        if not Profile.objects.get_or_create(user=request.user)[0].can_post:
+            messages.error(request, "Please verify your email before posting. The link is in your inbox.")
+            return redirect("chat")
         if form.is_valid():
             chat_message = form.save(commit=False)
             chat_message.user = request.user
@@ -345,6 +361,7 @@ def chat(request):
         "query": query,
         "answer": answer,
         "cited": cited,
+        "can_post": request.user.is_authenticated and Profile.objects.get_or_create(user=request.user)[0].can_post,
         "last_id": max((m.pk for m in chat_messages), default=0),
     })
 
@@ -391,13 +408,44 @@ def report_chat_message(request, pk):
         messages.success(request, "Thanks. Your report was sent to admin for review.")
     return redirect("chat")
 
+def alerts_off(request, token):
+    profile = get_object_or_404(Profile, alerts_token=token)
+    if request.method == "POST":
+        profile.alert_categories = []
+        profile.save(update_fields=["alert_categories"])
+        messages.success(request, "All email alerts are turned off. You can turn them back on from your dashboard.")
+        return redirect("home")
+    return render(request, "community/alerts_off.html", {"profile": profile})
+
+@login_required
+def delete_account(request):
+    user = request.user
+    if user.is_superuser:
+        messages.error(request, "The main admin account can't be deleted from the website.")
+        return redirect("dashboard")
+    form = DeleteAccountForm(user, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        for chat_message in user.chat_messages.all(): chat_message.image.delete(save=False)
+        for photo in ListingImage.objects.filter(listing__seller=user): photo.image.delete(save=False)
+        for listing in Listing.all_objects.filter(seller=user): listing.image.delete(save=False)
+        for item in LostFound.objects.filter(user=user): item.image_1.delete(save=False); item.image_2.delete(save=False)
+        logout(request)
+        user.delete()
+        messages.success(request, "Your account and everything you posted have been deleted.")
+        return redirect("home")
+    return render(request, "community/delete_account.html", {"form": form})
+
 def register(request):
     form = RegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         user = form.save()
-        Profile.objects.create(user=user, phone=form.cleaned_data["phone"], email_verified=True)
+        profile = Profile.objects.create(user=user, phone=form.cleaned_data["phone"])
         login(request, user)
-        messages.success(request, "Account created. Add a phone number in your dashboard before posting listings.")
+        try:
+            send_verification_email(request, profile)
+            messages.success(request, f"Account created! We sent a link to {user.email}. Open it to verify your email, then you can post.")
+        except Exception:
+            messages.warning(request, "Account created, but we couldn't send the verification email. Use Resend below to try again.")
         return redirect("dashboard")
     return render(request, "registration/register.html", {"form": form})
 
@@ -423,8 +471,15 @@ def dashboard(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
     has_phone = bool((profile.phone or "").strip())
     can_post_listing = True
-    form = ProfileForm(request.POST or None, instance=profile)
-    if request.method == "POST" and form.is_valid(): form.save(); messages.success(request, "Profile updated."); return redirect("dashboard")
+    alerts_post = request.method == "POST" and request.POST.get("form_type") == "alerts"
+    form = ProfileForm(request.POST if request.method == "POST" and not alerts_post else None, instance=profile)
+    alerts_form = AlertSettingsForm(request.POST if alerts_post else None, initial={"alert_categories": profile.alert_categories})
+    if alerts_post and alerts_form.is_valid():
+        profile.alert_categories = alerts_form.cleaned_data["alert_categories"]
+        profile.save(update_fields=["alert_categories"])
+        messages.success(request, "Email alerts saved." if profile.alert_categories else "Email alerts turned off.")
+        return redirect(reverse("dashboard") + "#email-alerts")
+    if request.method == "POST" and not alerts_post and form.is_valid(): form.save(); messages.success(request, "Profile updated."); return redirect("dashboard")
     report_queryset = LostFound.objects.all() if (request.user.is_staff or request.user.is_superuser) else LostFound.objects.filter(user=request.user)
     return render(request, "community/dashboard.html", {
         "profile": profile,
@@ -432,6 +487,7 @@ def dashboard(request):
         "can_post_listing": can_post_listing,
         "phone_code_sent": bool(profile.phone_verification_sent_at),
         "profile_form": form,
+        "alerts_form": alerts_form,
         "listings": request.user.listings.all(),
         "inquiries": sum((list(x.messages.all()) for x in request.user.listings.all()), []),
         "lost_found_reports": report_queryset,

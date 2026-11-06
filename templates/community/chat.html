@@ -42,7 +42,9 @@
 </div>
 
 <p class="chat-warning"><i class="bi bi-shield-exclamation"></i> Everyone can read this chat. Do not share sensitive information like passwords, bank or card numbers, SSNs, or your home address.</p>
-{% if user.is_authenticated %}
+{% if user.is_authenticated and not can_post %}
+<div class="chat-compose signed-out"><a href="{% url 'dashboard' %}" target="_top">Verify your email</a> to post in the chat.</div>
+{% elif user.is_authenticated %}
 <form method="post" enctype="multipart/form-data" class="chat-compose" data-chat-compose>
 	{% csrf_token %}
 	{% if form.errors %}<div class="chat-alert error">{% for error in form.non_field_errors %}{{ error }} {% endfor %}{% for field in form %}{% for error in field.errors %}{{ error }} {% endfor %}{% endfor %}</div>{% endif %}
