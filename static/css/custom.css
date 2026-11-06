@@ -1579,3 +1579,12 @@ svg {
 .app-guide-help li {
     margin-bottom:6px
 }
+
+/* Fox app icon as the site logo in the top bar */
+.brand-logo {
+    flex:none;
+    width:46px;
+    height:46px;
+    border-radius:10px;
+    box-shadow:0 0 0 2px rgba(244,189,50,.6)
+}
