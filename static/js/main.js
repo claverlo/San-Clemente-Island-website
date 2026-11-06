@@ -374,14 +374,14 @@ const appGuideSteps = () => {
   const plus = '<i class="bi bi-plus-square"></i>';
   const dots = '<i class="bi bi-three-dots"></i>';
   if (/FBAN|FBAV|FB_IAB|Instagram|Messenger|Snapchat|Line\/|TikTok/i.test(ua)) {
-    return { arrow: 'none', steps: [
+    return { demo: 'inApp', arrow: 'none', steps: [
       `You're inside another app's browser, which can't add apps. Tap ${dots} or the menu and choose <strong>Open in Safari</strong> (or <strong>Open in Chrome</strong>).`,
       'Or copy the link below and paste it into Safari or Chrome: <button type="button" class="btn btn-sm btn-navy ms-1" data-copy-site-link>Copy link</button>',
       'Then tap the fox banner again and follow the steps.',
     ] };
   }
   if (isIos && /CriOS/i.test(ua)) {
-    return { arrow: 'top-right', steps: [
+    return { demo: 'iosTop', arrow: 'top-right', steps: [
       `Tap the <strong>Share</strong> button ${share} at the top right, next to the web address.`,
       `Tap <strong>Add to Home Screen</strong> ${plus}. You may need to scroll down to see it.`,
       'Tap <strong>Add</strong>.',
@@ -390,42 +390,42 @@ const appGuideSteps = () => {
   if (isIos) {
     const safariVersion = Number((ua.match(/Version\/(\d+)/) || [])[1] || 0);
     if (isIpad) {
-      return { arrow: 'top-right', steps: [
+      return { demo: 'iosTop', arrow: 'top-right', steps: [
         `Tap the <strong>Share</strong> button ${share} at the top right of the screen.`,
         `Tap <strong>Add to Home Screen</strong> ${plus}.`,
         'Tap <strong>Add</strong>.',
       ] };
     }
     if (safariVersion >= 26) {
-      return { arrow: 'bottom-right', steps: [
+      return { demo: 'ios26', arrow: 'bottom-right', steps: [
         `Tap the ${dots} button at the bottom right of the screen.`,
         `Tap <strong>Share</strong> ${share}.`,
         `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
         'Tap <strong>Add</strong>.',
       ] };
     }
-    return { arrow: 'bottom', steps: [
+    return { demo: 'ios', arrow: 'bottom', steps: [
       `Tap the <strong>Share</strong> button ${share} at the bottom of the screen (the square with an arrow pointing up).`,
       `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
       'Tap <strong>Add</strong> at the top right.',
     ] };
   }
   if (/SamsungBrowser/i.test(ua)) {
-    return { arrow: 'bottom-right', steps: [
+    return { demo: 'samsung', arrow: 'bottom-right', steps: [
       'Tap the <strong>menu</strong> button <i class="bi bi-list"></i> at the bottom right.',
       'Tap <strong>Add page to</strong>, then <strong>Home screen</strong>.',
       'Tap <strong>Add</strong>.',
     ] };
   }
   if (/android/i.test(ua) && /Firefox/i.test(ua)) {
-    return { arrow: 'top-right', steps: [
+    return { demo: 'android', arrow: 'top-right', steps: [
       'Tap the <strong>menu</strong> button <i class="bi bi-three-dots-vertical"></i>.',
       'Tap <strong>Add app to Home screen</strong> (or <strong>Add to Home screen</strong>).',
       'Tap <strong>Add</strong>.',
     ] };
   }
   if (/android/i.test(ua)) {
-    return { arrow: 'top-right', steps: [
+    return { demo: 'android', arrow: 'top-right', steps: [
       'Tap the <strong>menu</strong> button <i class="bi bi-three-dots-vertical"></i> at the top right.',
       'Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.',
       'Tap <strong>Install</strong>.',
@@ -434,20 +434,20 @@ const appGuideSteps = () => {
   const isMac = /macintosh/i.test(ua);
   const bookmarkKeys = isMac ? '<strong>⌘ Command + D</strong>' : '<strong>Ctrl + D</strong>';
   if (/Firefox/i.test(ua)) {
-    return { arrow: 'none', steps: [
+    return { demo: 'firefox', arrow: 'none', steps: [
       `Firefox can't install apps, so bookmark SCI Connect instead: press ${bookmarkKeys}, or click the star <i class="bi bi-star"></i> in the address bar.`,
       'Click <strong>Save</strong>. SCI Connect is now in your bookmarks.',
       'Want it as an app with its own icon? Open sciconnect.net in Chrome, Edge or Safari and tap the fox banner again.',
     ] };
   }
   if (isMac && /Version\/\d+.*Safari/i.test(ua) && !/Chrome|Edg\//i.test(ua)) {
-    return { arrow: 'none', steps: [
+    return { demo: 'macSafari', arrow: 'none', steps: [
       'In the menu bar at the top of the screen, click <strong>File</strong>.',
       'Click <strong>Add to Dock</strong>, then <strong>Add</strong>. SCI Connect will sit in your Dock with the fox icon.',
       `Older Mac? Bookmark it instead: press ${bookmarkKeys}.`,
     ] };
   }
-  return { arrow: 'top-right', steps: [
+  return { demo: 'desktop', arrow: 'top-right', steps: [
     'Already installed? Look for <strong>Open in app</strong> at the right end of the address bar, or find SCI Connect in your apps.',
     'Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the browser menu and choose <strong>Install SCI Connect</strong>.',
     `Click <strong>Install</strong>. SCI Connect will open in its own window and show up in your ${isMac ? 'Launchpad and Dock' : 'Start menu'}.`,
@@ -456,11 +456,13 @@ const appGuideSteps = () => {
 };
 const openAppGuide = () => {
   if (!appGuide) return;
-  const { arrow, steps } = appGuideSteps();
-  appGuide.querySelector('[data-app-guide-steps]').innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
+  const { demo, arrow, steps } = appGuideSteps();
+  const stepsList = appGuide.querySelector('[data-app-guide-steps]');
+  stepsList.innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
   appGuide.dataset.arrow = arrow;
   appGuide.hidden = false;
   document.body.classList.add('disclaimer-lock');
+  window.renderAppDemo?.(appGuide.querySelector('[data-app-demo]'), demo, stepsList);
 };
 const closeAppGuide = () => {
   if (!appGuide || appGuide.hidden) return;
