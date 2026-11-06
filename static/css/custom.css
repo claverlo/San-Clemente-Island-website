@@ -1549,3 +1549,11 @@ svg {
         height:240px
     }
 }
+.app-guide-caution {
+    display:flex;
+    gap:6px;
+    margin:4px 0 8px;
+    color:var(--muted);
+    font-size:.8rem;
+    text-align:left
+}
