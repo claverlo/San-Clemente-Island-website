@@ -448,6 +448,7 @@ const appGuideSteps = () => {
     ] };
   }
   return { arrow: 'top-right', steps: [
+    'Already installed? Look for <strong>Open in app</strong> at the right end of the address bar, or find SCI Connect in your apps.',
     'Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the browser menu and choose <strong>Install SCI Connect</strong>.',
     `Click <strong>Install</strong>. SCI Connect will open in its own window and show up in your ${isMac ? 'Launchpad and Dock' : 'Start menu'}.`,
     `No install icon? Bookmark it instead: press ${bookmarkKeys}.`,
@@ -481,44 +482,40 @@ if (appGuide) {
     }
   });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAppGuide(); });
-  document.querySelectorAll('[data-app-guide-open]').forEach((link) => link.addEventListener('click', (event) => {
-    event.preventDefault();
-    openAppGuide();
-  }));
   const openFromHash = () => { if (window.location.hash === '#get-app') openAppGuide(); };
   window.addEventListener('hashchange', openFromHash);
   openFromHash();
 }
 
+// Chrome and Edge (Windows, Mac, Android) hand us a one-click install prompt; keep it for whenever the visitor
+// taps the logo, "Get app" or the footer link. Browsers without one (iPhone, Firefox, Safari) get the guide.
+let installPrompt = null;
 const appBanner = document.querySelector('[data-app-banner]');
+const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  installPrompt = event;
+});
+const getApp = async () => {
+  if (!installPrompt) { openAppGuide(); return; }
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  installPrompt = null;
+  if (outcome === 'accepted' && appBanner) appBanner.hidden = true;
+};
+document.querySelectorAll('[data-app-guide-open], [data-app-install]').forEach((link) => link.addEventListener('click', (event) => {
+  event.preventDefault();
+  getApp();
+}));
+window.addEventListener('appinstalled', () => { installPrompt = null; if (appBanner) appBanner.hidden = true; });
+
 if (appBanner) {
   const dismissKey = 'sciAppBannerDismissed';
-  const installButton = appBanner.querySelector('[data-app-install]');
-  const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   let dismissed = false;
   try { dismissed = window.localStorage.getItem(dismissKey) === '1'; } catch (error) { dismissed = false; }
-  let installPrompt = null;
-
-  if (!isInstalled && !dismissed) {
-    window.addEventListener('beforeinstallprompt', (event) => {
-      event.preventDefault();
-      installPrompt = event;
-      appBanner.hidden = false;
-    });
-    appBanner.hidden = false;
-  }
-
-  // Where the browser offers one-tap install (Android Chrome), use it; everywhere else show the guide.
-  installButton.addEventListener('click', async () => {
-    if (!installPrompt) { openAppGuide(); return; }
-    installPrompt.prompt();
-    await installPrompt.userChoice;
-    installPrompt = null;
-    appBanner.hidden = true;
-  });
+  if (!isInstalled && !dismissed) appBanner.hidden = false;
   appBanner.querySelector('[data-app-dismiss]').addEventListener('click', () => {
     appBanner.hidden = true;
     try { window.localStorage.setItem(dismissKey, '1'); } catch (error) { /* banner just comes back next visit */ }
   });
-  window.addEventListener('appinstalled', () => { appBanner.hidden = true; });
 }
