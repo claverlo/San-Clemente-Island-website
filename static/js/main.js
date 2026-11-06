@@ -366,10 +366,26 @@ if ('serviceWorker' in navigator) {
 // Phones can't add a website to the home screen by themselves, so the guide shows exactly which buttons to tap
 // for the visitor's phone and browser, with an arrow pointing at the right spot. sciconnect.net/#get-app opens it.
 const appGuide = document.querySelector('[data-app-guide]');
+// Preview another device's guide from any computer, e.g. sciconnect.net/#get-app-android
+const APP_GUIDE_PREVIEWS = {
+  iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+  iphone26: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1',
+  ipad: 'Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+  'iphone-chrome': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1',
+  facebook: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/480.0]',
+  android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+  samsung: 'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0 Mobile Safari/537.36',
+  windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+  mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15',
+  firefox: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+};
+const appGuidePreview = () => (window.location.hash.match(/^#get-app-([a-z0-9-]+)$/) || [])[1];
 const appGuideSteps = () => {
-  const ua = window.navigator.userAgent;
-  const isIos = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
-  const isIpad = /ipad/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const preview = APP_GUIDE_PREVIEWS[appGuidePreview()];
+  const ua = preview || window.navigator.userAgent;
+  const touchMac = !preview && /macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+  const isIos = /iphone|ipad|ipod/i.test(ua) || touchMac;
+  const isIpad = /ipad/i.test(ua) || touchMac;
   const share = '<i class="bi bi-box-arrow-up"></i>';
   const plus = '<i class="bi bi-plus-square"></i>';
   const dots = '<i class="bi bi-three-dots"></i>';
@@ -468,7 +484,7 @@ const closeAppGuide = () => {
   if (!appGuide || appGuide.hidden) return;
   appGuide.hidden = true;
   document.body.classList.remove('disclaimer-lock');
-  if (window.location.hash === '#get-app') history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (window.location.hash.startsWith('#get-app')) history.replaceState(null, '', window.location.pathname + window.location.search);
 };
 if (appGuide) {
   appGuide.addEventListener('click', async (event) => {
@@ -484,7 +500,7 @@ if (appGuide) {
     }
   });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAppGuide(); });
-  const openFromHash = () => { if (window.location.hash === '#get-app') openAppGuide(); };
+  const openFromHash = () => { if (window.location.hash === '#get-app' || appGuidePreview()) openAppGuide(); };
   window.addEventListener('hashchange', openFromHash);
   openFromHash();
 }
