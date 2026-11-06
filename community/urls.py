@@ -21,5 +21,6 @@ urlpatterns = [
     path("chat/<int:pk>/delete/", views.chat_delete, name="chat_delete"),
     path("manifest.webmanifest", views.app_manifest, name="app_manifest"), path("sw.js", views.service_worker, name="service_worker"),
     path("offline/", views.offline, name="offline"),
+    path("account/delete/", views.delete_account, name="delete_account"), path("alerts/off/<uuid:token>/", views.alerts_off, name="alerts_off"),
     path("chat/<int:pk>/report/", views.report_chat_message, name="report_chat_message"),
 ]

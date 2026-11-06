@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import User
-from .models import ChatMessage, ContactMessage, Listing, LostFound, Profile
+from .models import ChatMessage, ContactMessage, Listing, LostFound, Profile, alert_choices
 
 def normalize_phone(value):
     digits = "".join(character for character in value if character.isdigit())
@@ -274,3 +274,27 @@ class ChatMessageForm(BootstrapMixin, forms.ModelForm):
         if not (cleaned_data.get("body") or "").strip() and not cleaned_data.get("image"):
             raise forms.ValidationError("Type a message or add a photo.")
         return cleaned_data
+
+class AlertSettingsForm(forms.Form):
+    alert_categories = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Email me when someone posts in:",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["alert_categories"].choices = alert_choices()
+
+class DeleteAccountForm(forms.Form):
+    password = forms.CharField(widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "current-password"}), label="Enter your password to confirm")
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError("That password is not correct.")
+        return password

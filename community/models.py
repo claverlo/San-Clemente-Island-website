@@ -16,8 +16,14 @@ class Profile(models.Model):
     phone_verification_code = models.CharField(max_length=6, blank=True)
     phone_verification_sent_at = models.DateTimeField(null=True, blank=True)
     phone_verification_expires_at = models.DateTimeField(null=True, blank=True)
+    alert_categories = models.JSONField(default=list, blank=True)
+    alerts_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     def __str__(self): return self.user.username
+
+    @property
+    def can_post(self):
+        return self.email_verified or self.user.is_staff or self.user.is_superuser
 
     def set_phone_verification_code(self, code):
         now = timezone.now()
@@ -36,6 +42,11 @@ class Profile(models.Model):
         if timezone.now() > self.phone_verification_expires_at:
             return False
         return self.phone_verification_code == code
+
+LOST_FOUND_ALERT = "Lost & Found"
+
+def alert_choices():
+    return Listing.CATEGORIES + [(LOST_FOUND_ALERT, LOST_FOUND_ALERT)]
 
 class ActiveListingManager(models.Manager):
     def get_queryset(self):

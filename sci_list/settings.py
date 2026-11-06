@@ -48,3 +48,8 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
 }
+# Stay logged in for 12 hours, even after closing the browser or turning the phone off.
+# Each visit restarts the 12 hours, so people only get logged out after 12 hours of not using the site.
+SESSION_COOKIE_AGE = 12 * 60 * 60
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_SAVE_EVERY_REQUEST = True

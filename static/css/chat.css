@@ -316,3 +316,18 @@ html,body {
     top:12px;
     right:12px
 }
+.chat-warning {
+    display:flex;
+    gap:6px;
+    margin:0;
+    padding:6px 12px;
+    border-top:1px solid #f0d58a;
+    background:#fff8e3;
+    color:#6b5210;
+    font-size:.75rem;
+    line-height:1.35
+}
+.chat-warning i {
+    flex:none;
+    color:#b4232f
+}

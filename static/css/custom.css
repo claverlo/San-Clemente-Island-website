@@ -931,3 +931,20 @@ svg {
     font-size:.85rem;
     color:#c9d6e4
 }
+
+.alert-choices {
+    display:grid;
+    gap:.35rem
+}
+.alert-choices .form-check {
+    display:flex;
+    align-items:center;
+    gap:.5rem;
+    margin:0;
+    padding-left:0
+}
+.alert-choices .form-check input {
+    margin:0;
+    width:1.1rem;
+    height:1.1rem
+}

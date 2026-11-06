@@ -1,3 +1,4 @@
+from django.core import mail
 import tempfile
 from datetime import timedelta
 from unittest.mock import patch
@@ -129,6 +130,8 @@ class CommunityTests(TestCase):
         self.assertRedirects(response, reverse("dashboard"))
         profile = Profile.objects.get(user__username="newuser")
         self.assertEqual(profile.phone, "555-555-0199")
+        self.assertRedirects(self.client.get(reverse("listing_create")), reverse("dashboard"))
+        self.client.get(reverse("verify_email", args=[profile.verification_token]))
         response = self.client.get(reverse("listing_create"))
         self.assertEqual(response.status_code, 200)
 
@@ -143,7 +146,11 @@ class CommunityTests(TestCase):
 
         profile = Profile.objects.get(user__username="emailonly")
         self.assertEqual(profile.phone, "")
+        self.assertFalse(profile.email_verified)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(str(profile.verification_token), mail.outbox[0].body)
 
+        self.client.get(reverse("verify_email", args=[profile.verification_token]))
         response = self.client.get(reverse("listing_create"))
         self.assertEqual(response.status_code, 200)
 
@@ -365,6 +372,8 @@ class ChatTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("sailor", password="testpass123")
         self.other = User.objects.create_user("diver", password="testpass123")
+        for user in (self.user, self.other):
+            Profile.objects.create(user=user, phone="", email_verified=True)
 
     def test_anyone_can_read_but_must_log_in_to_post(self):
         ChatMessage.objects.create(user=self.other, body="Hello island")
@@ -475,3 +484,93 @@ class InstallableAppTests(TestCase):
     def test_pages_link_the_manifest_and_offline_page_loads(self):
         self.assertContains(self.client.get(reverse("home")), reverse("app_manifest"))
         self.assertContains(self.client.get(reverse("offline")), "No signal right now")
+
+
+class SessionAndChatNoticeTests(TestCase):
+    def test_login_survives_closing_the_browser_for_twelve_hours(self):
+        User.objects.create_user("sailor", password="testpass123")
+        self.client.post(reverse("login"), {"username": "sailor", "password": "testpass123"})
+        cookie = self.client.cookies["sessionid"]
+        self.assertEqual(int(cookie["max-age"]), 12 * 60 * 60)
+
+    def test_chat_warns_against_sharing_sensitive_information(self):
+        self.assertContains(self.client.get(reverse("chat")), "Do not share sensitive information")
+
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend", OPENAI_API_KEY="")
+class AccountFeatureTests(TestCase):
+    def setUp(self):
+        self.poster = User.objects.create_user("poster", email="poster@example.com", password="testpass123")
+        Profile.objects.create(user=self.poster, phone="555-555-0100", email_verified=True)
+        self.fan = User.objects.create_user("fan", email="fan@example.com", password="testpass123")
+        self.fan_profile = Profile.objects.create(user=self.fan, phone="", email_verified=True, alert_categories=["Free", "Lost & Found"])
+
+    def post_listing(self, category):
+        self.client.login(username="poster", password="testpass123")
+        return self.client.post(reverse("listing_create"), {
+            "title": "Free couch", "category": category, "price": "0", "location": "Housing",
+            "description": "Comfy couch, come get it.", "contact_email": "poster@example.com", "contact_phone": "555-555-0100",
+        })
+
+    def test_free_stuff_alert_emails_subscribers_but_not_the_poster(self):
+        self.post_listing("Free")
+        self.assertEqual([m.to for m in mail.outbox], [["fan@example.com"]])
+        self.assertIn("Free couch", mail.outbox[0].subject)
+        self.assertIn(str(self.fan_profile.alerts_token), mail.outbox[0].body)
+
+    def test_no_alert_for_categories_the_member_did_not_pick(self):
+        self.post_listing("For Sale")
+        self.assertEqual(mail.outbox, [])
+
+    def test_lost_and_found_alert(self):
+        self.client.login(username="poster", password="testpass123")
+        self.client.post(reverse("lost_found"), {
+            "kind": "Lost", "item": "Keys", "description": "Blue lanyard", "location": "Galley",
+            "date": timezone.localdate().isoformat(), "contact_name": "Poster", "contact_method": "phone", "contact_phone": "555-555-0100",
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Lost: Keys", mail.outbox[0].subject)
+
+    def test_member_saves_alert_choices_from_dashboard(self):
+        self.client.login(username="fan", password="testpass123")
+        self.client.post(reverse("dashboard"), {"form_type": "alerts", "alert_categories": ["For Sale"]})
+        self.fan_profile.refresh_from_db()
+        self.assertEqual(self.fan_profile.alert_categories, ["For Sale"])
+
+    def test_alerts_off_link_turns_off_every_alert(self):
+        url = reverse("alerts_off", args=[self.fan_profile.alerts_token])
+        self.assertContains(self.client.get(url), "Turn off all alerts")
+        self.client.post(url)
+        self.fan_profile.refresh_from_db()
+        self.assertEqual(self.fan_profile.alert_categories, [])
+
+    def test_unverified_member_cannot_post_until_email_is_verified(self):
+        newbie = User.objects.create_user("newbie", email="newbie@example.com", password="testpass123")
+        Profile.objects.create(user=newbie, phone="")
+        self.client.login(username="newbie", password="testpass123")
+        self.assertRedirects(self.client.get(reverse("listing_create")), reverse("dashboard"))
+        self.client.post(reverse("chat"), {"body": "hi"})
+        self.assertFalse(ChatMessage.objects.exists())
+        self.assertContains(self.client.get(reverse("dashboard")), "Resend verification email")
+
+    def test_delete_account_needs_the_right_password(self):
+        self.client.login(username="fan", password="testpass123")
+        response = self.client.post(reverse("delete_account"), {"password": "wrong"})
+        self.assertContains(response, "That password is not correct.")
+        self.assertTrue(User.objects.filter(username="fan").exists())
+        response = self.client.post(reverse("delete_account"), {"password": "testpass123"})
+        self.assertRedirects(response, reverse("home"))
+        self.assertFalse(User.objects.filter(username="fan").exists())
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_delete_account_removes_the_members_posts(self):
+        self.post_listing("For Sale")
+        self.client.post(reverse("delete_account"), {"password": "testpass123"})
+        self.assertFalse(Listing.all_objects.filter(title="Free couch").exists())
+
+    def test_main_admin_account_cannot_be_deleted_from_the_site(self):
+        User.objects.create_superuser("boss", "boss@example.com", "testpass123")
+        self.client.login(username="boss", password="testpass123")
+        self.client.post(reverse("delete_account"), {"password": "testpass123"})
+        self.assertTrue(User.objects.filter(username="boss").exists())
