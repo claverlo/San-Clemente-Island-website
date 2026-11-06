@@ -1107,3 +1107,445 @@ svg {
         animation:none !important
     }
 }
+
+/* Animated install demo inside the app guide */
+.app-demo {
+    display:flex;
+    justify-content:center;
+    margin:0 0 14px
+}
+.app-demo[hidden] {
+    display:none
+}
+.demo-device {
+    padding:8px;
+    border-radius:26px;
+    background:#1b2330;
+    box-shadow:0 6px 18px rgba(7,31,61,.25)
+}
+.demo-device.desktop {
+    padding:6px 6px 10px;
+    border-radius:10px
+}
+.demo-screen {
+    position:relative;
+    overflow:hidden;
+    width:190px;
+    height:300px;
+    border-radius:18px;
+    background:#f3f6fa;
+    font-size:11px;
+    text-align:left
+}
+.demo-device.desktop .demo-screen {
+    width:300px;
+    height:180px;
+    border-radius:4px
+}
+.demo-page {
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding:46px 12px 12px
+}
+.demo-page span {
+    height:10px;
+    border-radius:4px;
+    background:#dce3ec
+}
+.demo-page span.short {
+    width:60%
+}
+.demo-page .demo-site {
+    height:auto;
+    padding:8px;
+    border-radius:6px;
+    background:var(--navy);
+    color:var(--gold);
+    font-weight:800;
+    letter-spacing:.04em
+}
+.demo-bar {
+    position:absolute;
+    left:0;
+    right:0;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    justify-content:space-around;
+    gap:4px;
+    height:36px;
+    padding:0 6px;
+    background:#fff;
+    color:#2a6fdb;
+    font-size:14px
+}
+.demo-bar.top {
+    top:0;
+    border-bottom:1px solid #dde3ea
+}
+.demo-bar.bottom {
+    bottom:0;
+    border-top:1px solid #dde3ea
+}
+.demo-bar.bottom~.demo-layer .at-top {
+    top:10px
+}
+.demo-bar.menubar {
+    justify-content:flex-start;
+    gap:10px;
+    height:22px;
+    padding:0 8px;
+    background:#eceef1;
+    color:#1d1d1f;
+    font-size:11px
+}
+.demo-device.desktop .demo-page {
+    padding-top:44px
+}
+.demo-btn,.demo-item,.demo-dialog-btn {
+    transition:background .15s,transform .15s
+}
+.demo-btn {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:22px;
+    height:24px;
+    border-radius:6px
+}
+.demo-text {
+    font-weight:600
+}
+.demo-url {
+    flex:1;
+    display:flex;
+    align-items:center;
+    gap:4px;
+    min-width:0;
+    height:24px;
+    padding:0 6px;
+    border-radius:8px;
+    background:#eef1f5;
+    color:#4a5563;
+    font-size:10px;
+    white-space:nowrap
+}
+.demo-url .bi-lock-fill {
+    font-size:9px
+}
+.demo-url-btn {
+    margin-left:auto;
+    color:#2a6fdb;
+    font-size:12px
+}
+.pressed {
+    background:rgba(42,111,219,.22)!important;
+    transform:scale(.94)
+}
+.demo-layer {
+    position:absolute;
+    inset:0;
+    z-index:3;
+    pointer-events:none
+}
+.demo-panel {
+    position:absolute;
+    display:flex;
+    flex-direction:column;
+    padding:4px;
+    border-radius:10px;
+    background:#fff;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
+    animation:demo-pop .25s ease-out
+}
+.demo-sheet.at-bottom {
+    left:0;
+    right:0;
+    bottom:0;
+    padding:10px 6px 14px;
+    border-radius:14px 14px 0 0;
+    animation:demo-slide-up .3s ease-out
+}
+.demo-menu {
+    min-width:118px
+}
+.demo-menu.at-top-right {
+    top:34px;
+    right:6px
+}
+.demo-menu.at-bottom-right {
+    right:6px;
+    bottom:40px
+}
+.demo-menu.at-top-left {
+    top:22px;
+    left:56px
+}
+.demo-item {
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:6px 8px;
+    border-radius:6px;
+    color:#1d1d1f
+}
+.demo-item i {
+    width:14px;
+    color:#2a6fdb
+}
+.demo-dialog {
+    align-items:center;
+    gap:8px;
+    width:150px;
+    padding:12px;
+    text-align:center
+}
+.demo-dialog.at-top {
+    top:44px;
+    left:20px
+}
+.demo-dialog.at-center {
+    top:50%;
+    left:50%;
+    margin:-60px 0 0 -75px
+}
+.demo-dialog.at-top-right {
+    top:42px;
+    right:8px
+}
+.demo-dialog-app {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-weight:600
+}
+.demo-dialog-app img,.demo-app img {
+    width:26px;
+    height:26px;
+    border-radius:7px
+}
+.demo-dialog-btn {
+    padding:4px 16px;
+    border-radius:999px;
+    background:#2a6fdb;
+    color:#fff;
+    font-weight:700
+}
+.demo-home {
+    position:absolute;
+    inset:0;
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    align-content:start;
+    gap:14px 6px;
+    padding:30px 10px;
+    background:linear-gradient(160deg,#0d3158,#116b9e);
+    animation:demo-fade .35s ease-out
+}
+.demo-home.browser {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#f3f6fa
+}
+.demo-done {
+    padding:8px 12px;
+    border-radius:999px;
+    background:#effaf4;
+    color:#18794e;
+    font-weight:700
+}
+.demo-app {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px
+}
+.demo-app>span {
+    width:30px;
+    height:30px;
+    border-radius:8px;
+    background:rgba(255,255,255,.35)
+}
+.demo-app small {
+    min-height:9px;
+    color:#fff;
+    font-size:8px;
+    white-space:nowrap
+}
+.demo-app img {
+    width:30px;
+    height:30px
+}
+.demo-app.new {
+    animation:demo-new-app .7s ease-out
+}
+.demo-taskbar {
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    display:flex;
+    justify-content:center;
+    gap:8px;
+    padding:6px;
+    background:rgba(20,28,40,.85);
+    animation:demo-slide-up .3s ease-out
+}
+.demo-taskbar.dock {
+    left:40px;
+    right:40px;
+    bottom:6px;
+    border-radius:12px;
+    background:rgba(255,255,255,.6)
+}
+.demo-taskbar .demo-app>span {
+    width:22px;
+    height:22px;
+    border-radius:6px
+}
+.demo-taskbar .demo-app img {
+    width:22px;
+    height:22px;
+    border-radius:6px
+}
+.demo-taskbar small {
+    display:none
+}
+.demo-bookmarks {
+    position:absolute;
+    top:36px;
+    left:0;
+    right:0;
+    display:flex;
+    gap:8px;
+    padding:4px 8px;
+    background:#fff;
+    border-bottom:1px solid #dde3ea
+}
+.demo-app.inline {
+    flex-direction:row;
+    gap:5px
+}
+.demo-app.inline img {
+    width:14px;
+    height:14px;
+    border-radius:3px
+}
+.demo-app.inline small {
+    color:#1d1d1f;
+    font-size:10px
+}
+.demo-finger {
+    position:absolute;
+    z-index:5;
+    left:50%;
+    top:110%;
+    margin:-2px 0 0 -8px;
+    color:#f4bd32;
+    font-size:26px;
+    line-height:1;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));
+    opacity:0;
+    transition:left .7s ease-in-out,top .7s ease-in-out,opacity .3s;
+    pointer-events:none
+}
+.demo-finger.show {
+    opacity:1
+}
+.demo-finger.tap i {
+    display:inline-block;
+    transform:scale(.82)
+}
+.demo-finger::after {
+    content:"";
+    position:absolute;
+    left:2px;
+    top:-4px;
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    border:2px solid #f4bd32;
+    opacity:0
+}
+.demo-finger.tap::after {
+    animation:demo-ripple .45s ease-out
+}
+.app-guide-steps li {
+    transition:background .2s
+}
+.app-guide-steps li.is-active {
+    border-radius:10px;
+    background:#fff8e3
+}
+.app-guide-steps li.is-active::before {
+    background:var(--gold);
+    color:var(--navy)
+}
+@keyframes demo-pop {
+    from { opacity:0; transform:scale(.92) }
+    to { opacity:1; transform:none }
+}
+@keyframes demo-slide-up {
+    from { transform:translateY(100%) }
+    to { transform:none }
+}
+@keyframes demo-fade {
+    from { opacity:0 }
+    to { opacity:1 }
+}
+@keyframes demo-new-app {
+    0% { opacity:0; transform:scale(.3) }
+    60% { opacity:1; transform:scale(1.25) }
+    100% { transform:none }
+}
+@keyframes demo-ripple {
+    from { opacity:1; transform:scale(.6) }
+    to { opacity:0; transform:scale(2.4) }
+}
+.demo-dialog.demo-sheet-head {
+    left:0;
+    right:0;
+    top:0;
+    bottom:0;
+    width:auto;
+    justify-content:flex-start;
+    padding:10px 8px;
+    border-radius:18px 18px 0 0;
+    animation:demo-slide-up .3s ease-out
+}
+.demo-dialog-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    align-self:stretch;
+    gap:4px;
+    padding-bottom:8px;
+    border-bottom:1px solid #e6eaf0;
+    color:#2a6fdb
+}
+.demo-dialog-head strong {
+    color:#1d1d1f;
+    font-size:10px
+}
+.demo-head-btn {
+    padding:2px 6px;
+    border-radius:6px;
+    font-weight:700
+}
+.demo-sheet-head .demo-dialog-app {
+    align-self:flex-start;
+    margin-top:6px
+}
+@media (max-height:760px) {
+    .app-guide-icon {
+        display:none
+    }
+    .demo-screen {
+        width:160px;
+        height:240px
+    }
+}

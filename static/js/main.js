@@ -366,22 +366,38 @@ if ('serviceWorker' in navigator) {
 // Phones can't add a website to the home screen by themselves, so the guide shows exactly which buttons to tap
 // for the visitor's phone and browser, with an arrow pointing at the right spot. sciconnect.net/#get-app opens it.
 const appGuide = document.querySelector('[data-app-guide]');
+// Preview another device's guide from any computer, e.g. sciconnect.net/#get-app-android
+const APP_GUIDE_PREVIEWS = {
+  iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+  iphone26: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1',
+  ipad: 'Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+  'iphone-chrome': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1',
+  facebook: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/480.0]',
+  android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+  samsung: 'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0 Mobile Safari/537.36',
+  windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+  mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15',
+  firefox: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+};
+const appGuidePreview = () => (window.location.hash.match(/^#get-app-([a-z0-9-]+)$/) || [])[1];
 const appGuideSteps = () => {
-  const ua = window.navigator.userAgent;
-  const isIos = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
-  const isIpad = /ipad/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const preview = APP_GUIDE_PREVIEWS[appGuidePreview()];
+  const ua = preview || window.navigator.userAgent;
+  const touchMac = !preview && /macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+  const isIos = /iphone|ipad|ipod/i.test(ua) || touchMac;
+  const isIpad = /ipad/i.test(ua) || touchMac;
   const share = '<i class="bi bi-box-arrow-up"></i>';
   const plus = '<i class="bi bi-plus-square"></i>';
   const dots = '<i class="bi bi-three-dots"></i>';
   if (/FBAN|FBAV|FB_IAB|Instagram|Messenger|Snapchat|Line\/|TikTok/i.test(ua)) {
-    return { arrow: 'none', steps: [
+    return { demo: 'inApp', arrow: 'none', steps: [
       `You're inside another app's browser, which can't add apps. Tap ${dots} or the menu and choose <strong>Open in Safari</strong> (or <strong>Open in Chrome</strong>).`,
       'Or copy the link below and paste it into Safari or Chrome: <button type="button" class="btn btn-sm btn-navy ms-1" data-copy-site-link>Copy link</button>',
       'Then tap the fox banner again and follow the steps.',
     ] };
   }
   if (isIos && /CriOS/i.test(ua)) {
-    return { arrow: 'top-right', steps: [
+    return { demo: 'iosTop', arrow: 'top-right', steps: [
       `Tap the <strong>Share</strong> button ${share} at the top right, next to the web address.`,
       `Tap <strong>Add to Home Screen</strong> ${plus}. You may need to scroll down to see it.`,
       'Tap <strong>Add</strong>.',
@@ -390,42 +406,42 @@ const appGuideSteps = () => {
   if (isIos) {
     const safariVersion = Number((ua.match(/Version\/(\d+)/) || [])[1] || 0);
     if (isIpad) {
-      return { arrow: 'top-right', steps: [
+      return { demo: 'iosTop', arrow: 'top-right', steps: [
         `Tap the <strong>Share</strong> button ${share} at the top right of the screen.`,
         `Tap <strong>Add to Home Screen</strong> ${plus}.`,
         'Tap <strong>Add</strong>.',
       ] };
     }
     if (safariVersion >= 26) {
-      return { arrow: 'bottom-right', steps: [
+      return { demo: 'ios26', arrow: 'bottom-right', steps: [
         `Tap the ${dots} button at the bottom right of the screen.`,
         `Tap <strong>Share</strong> ${share}.`,
         `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
         'Tap <strong>Add</strong>.',
       ] };
     }
-    return { arrow: 'bottom', steps: [
+    return { demo: 'ios', arrow: 'bottom', steps: [
       `Tap the <strong>Share</strong> button ${share} at the bottom of the screen (the square with an arrow pointing up).`,
       `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
       'Tap <strong>Add</strong> at the top right.',
     ] };
   }
   if (/SamsungBrowser/i.test(ua)) {
-    return { arrow: 'bottom-right', steps: [
+    return { demo: 'samsung', arrow: 'bottom-right', steps: [
       'Tap the <strong>menu</strong> button <i class="bi bi-list"></i> at the bottom right.',
       'Tap <strong>Add page to</strong>, then <strong>Home screen</strong>.',
       'Tap <strong>Add</strong>.',
     ] };
   }
   if (/android/i.test(ua) && /Firefox/i.test(ua)) {
-    return { arrow: 'top-right', steps: [
+    return { demo: 'android', arrow: 'top-right', steps: [
       'Tap the <strong>menu</strong> button <i class="bi bi-three-dots-vertical"></i>.',
       'Tap <strong>Add app to Home screen</strong> (or <strong>Add to Home screen</strong>).',
       'Tap <strong>Add</strong>.',
     ] };
   }
   if (/android/i.test(ua)) {
-    return { arrow: 'top-right', steps: [
+    return { demo: 'android', arrow: 'top-right', steps: [
       'Tap the <strong>menu</strong> button <i class="bi bi-three-dots-vertical"></i> at the top right.',
       'Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.',
       'Tap <strong>Install</strong>.',
@@ -434,20 +450,20 @@ const appGuideSteps = () => {
   const isMac = /macintosh/i.test(ua);
   const bookmarkKeys = isMac ? '<strong>⌘ Command + D</strong>' : '<strong>Ctrl + D</strong>';
   if (/Firefox/i.test(ua)) {
-    return { arrow: 'none', steps: [
+    return { demo: 'firefox', arrow: 'none', steps: [
       `Firefox can't install apps, so bookmark SCI Connect instead: press ${bookmarkKeys}, or click the star <i class="bi bi-star"></i> in the address bar.`,
       'Click <strong>Save</strong>. SCI Connect is now in your bookmarks.',
       'Want it as an app with its own icon? Open sciconnect.net in Chrome, Edge or Safari and tap the fox banner again.',
     ] };
   }
   if (isMac && /Version\/\d+.*Safari/i.test(ua) && !/Chrome|Edg\//i.test(ua)) {
-    return { arrow: 'none', steps: [
+    return { demo: 'macSafari', arrow: 'none', steps: [
       'In the menu bar at the top of the screen, click <strong>File</strong>.',
       'Click <strong>Add to Dock</strong>, then <strong>Add</strong>. SCI Connect will sit in your Dock with the fox icon.',
       `Older Mac? Bookmark it instead: press ${bookmarkKeys}.`,
     ] };
   }
-  return { arrow: 'top-right', steps: [
+  return { demo: 'desktop', arrow: 'top-right', steps: [
     'Already installed? Look for <strong>Open in app</strong> at the right end of the address bar, or find SCI Connect in your apps.',
     'Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the browser menu and choose <strong>Install SCI Connect</strong>.',
     `Click <strong>Install</strong>. SCI Connect will open in its own window and show up in your ${isMac ? 'Launchpad and Dock' : 'Start menu'}.`,
@@ -456,17 +472,19 @@ const appGuideSteps = () => {
 };
 const openAppGuide = () => {
   if (!appGuide) return;
-  const { arrow, steps } = appGuideSteps();
-  appGuide.querySelector('[data-app-guide-steps]').innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
+  const { demo, arrow, steps } = appGuideSteps();
+  const stepsList = appGuide.querySelector('[data-app-guide-steps]');
+  stepsList.innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
   appGuide.dataset.arrow = arrow;
   appGuide.hidden = false;
   document.body.classList.add('disclaimer-lock');
+  window.renderAppDemo?.(appGuide.querySelector('[data-app-demo]'), demo, stepsList);
 };
 const closeAppGuide = () => {
   if (!appGuide || appGuide.hidden) return;
   appGuide.hidden = true;
   document.body.classList.remove('disclaimer-lock');
-  if (window.location.hash === '#get-app') history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (window.location.hash.startsWith('#get-app')) history.replaceState(null, '', window.location.pathname + window.location.search);
 };
 if (appGuide) {
   appGuide.addEventListener('click', async (event) => {
@@ -482,7 +500,7 @@ if (appGuide) {
     }
   });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAppGuide(); });
-  const openFromHash = () => { if (window.location.hash === '#get-app') openAppGuide(); };
+  const openFromHash = () => { if (window.location.hash === '#get-app' || appGuidePreview()) openAppGuide(); };
   window.addEventListener('hashchange', openFromHash);
   openFromHash();
 }
