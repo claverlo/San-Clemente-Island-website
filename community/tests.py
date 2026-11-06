@@ -475,3 +475,14 @@ class InstallableAppTests(TestCase):
     def test_pages_link_the_manifest_and_offline_page_loads(self):
         self.assertContains(self.client.get(reverse("home")), reverse("app_manifest"))
         self.assertContains(self.client.get(reverse("offline")), "No signal right now")
+
+
+class SessionAndChatNoticeTests(TestCase):
+    def test_login_survives_closing_the_browser_for_twelve_hours(self):
+        User.objects.create_user("sailor", password="testpass123")
+        self.client.post(reverse("login"), {"username": "sailor", "password": "testpass123"})
+        cookie = self.client.cookies["sessionid"]
+        self.assertEqual(int(cookie["max-age"]), 12 * 60 * 60)
+
+    def test_chat_warns_against_sharing_sensitive_information(self):
+        self.assertContains(self.client.get(reverse("chat")), "Do not share sensitive information")

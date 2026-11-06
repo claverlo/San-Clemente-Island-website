@@ -530,7 +530,7 @@ export default function App({ adminMode = false }) {
             className="btn btn-success w-100 mb-2"
             onClick={() => setShowAdminLogin(true)}
           >
-            ADMIN ACCESS
+            Admin
           </button>
         )}
 

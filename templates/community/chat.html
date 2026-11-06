@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Island Chat | SCI List</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<link rel="stylesheet" href="{% static 'css/chat.css' %}?v=20261102-1"></head>
+<link rel="stylesheet" href="{% static 'css/chat.css' %}?v=20261105-1"></head>
 <body class="chat-page">
 <header class="chat-head">
 	<div>
@@ -41,6 +41,7 @@
 	<div id="chat-bottom"></div>
 </div>
 
+<p class="chat-warning"><i class="bi bi-shield-exclamation"></i> Everyone can read this chat. Do not share sensitive information like passwords, bank or card numbers, SSNs, or your home address.</p>
 {% if user.is_authenticated %}
 <form method="post" enctype="multipart/form-data" class="chat-compose" data-chat-compose>
 	{% csrf_token %}
