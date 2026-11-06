@@ -475,6 +475,7 @@ const openAppGuide = () => {
   const { demo, arrow, steps } = appGuideSteps();
   const stepsList = appGuide.querySelector('[data-app-guide-steps]');
   stepsList.innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
+  appGuide.querySelector('[data-app-guide-help]').hidden = !demo.startsWith('ios');
   appGuide.dataset.arrow = arrow;
   appGuide.hidden = false;
   document.body.classList.add('disclaimer-lock');

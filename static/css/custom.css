@@ -1557,3 +1557,25 @@ svg {
     font-size:.8rem;
     text-align:left
 }
+.app-guide-help {
+    margin:4px 0 8px;
+    padding:8px 12px;
+    border-radius:12px;
+    background:#fff8e3;
+    text-align:left;
+    font-size:.88rem
+}
+.app-guide-help[hidden] {
+    display:none
+}
+.app-guide-help summary {
+    color:#6b5210;
+    cursor:pointer
+}
+.app-guide-help ul {
+    margin:8px 0 0;
+    padding-left:18px
+}
+.app-guide-help li {
+    margin-bottom:6px
+}
