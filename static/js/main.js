@@ -363,11 +363,137 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
 
+// Phones can't add a website to the home screen by themselves, so the guide shows exactly which buttons to tap
+// for the visitor's phone and browser, with an arrow pointing at the right spot. sciconnect.net/#get-app opens it.
+const appGuide = document.querySelector('[data-app-guide]');
+const appGuideSteps = () => {
+  const ua = window.navigator.userAgent;
+  const isIos = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const isIpad = /ipad/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const share = '<i class="bi bi-box-arrow-up"></i>';
+  const plus = '<i class="bi bi-plus-square"></i>';
+  const dots = '<i class="bi bi-three-dots"></i>';
+  if (/FBAN|FBAV|FB_IAB|Instagram|Messenger|Snapchat|Line\/|TikTok/i.test(ua)) {
+    return { arrow: 'none', steps: [
+      `You're inside another app's browser, which can't add apps. Tap ${dots} or the menu and choose <strong>Open in Safari</strong> (or <strong>Open in Chrome</strong>).`,
+      'Or copy the link below and paste it into Safari or Chrome: <button type="button" class="btn btn-sm btn-navy ms-1" data-copy-site-link>Copy link</button>',
+      'Then tap the fox banner again and follow the steps.',
+    ] };
+  }
+  if (isIos && /CriOS/i.test(ua)) {
+    return { arrow: 'top-right', steps: [
+      `Tap the <strong>Share</strong> button ${share} at the top right, next to the web address.`,
+      `Tap <strong>Add to Home Screen</strong> ${plus}. You may need to scroll down to see it.`,
+      'Tap <strong>Add</strong>.',
+    ] };
+  }
+  if (isIos) {
+    const safariVersion = Number((ua.match(/Version\/(\d+)/) || [])[1] || 0);
+    if (isIpad) {
+      return { arrow: 'top-right', steps: [
+        `Tap the <strong>Share</strong> button ${share} at the top right of the screen.`,
+        `Tap <strong>Add to Home Screen</strong> ${plus}.`,
+        'Tap <strong>Add</strong>.',
+      ] };
+    }
+    if (safariVersion >= 26) {
+      return { arrow: 'bottom-right', steps: [
+        `Tap the ${dots} button at the bottom right of the screen.`,
+        `Tap <strong>Share</strong> ${share}.`,
+        `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
+        'Tap <strong>Add</strong>.',
+      ] };
+    }
+    return { arrow: 'bottom', steps: [
+      `Tap the <strong>Share</strong> button ${share} at the bottom of the screen (the square with an arrow pointing up).`,
+      `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
+      'Tap <strong>Add</strong> at the top right.',
+    ] };
+  }
+  if (/SamsungBrowser/i.test(ua)) {
+    return { arrow: 'bottom-right', steps: [
+      'Tap the <strong>menu</strong> button <i class="bi bi-list"></i> at the bottom right.',
+      'Tap <strong>Add page to</strong>, then <strong>Home screen</strong>.',
+      'Tap <strong>Add</strong>.',
+    ] };
+  }
+  if (/android/i.test(ua) && /Firefox/i.test(ua)) {
+    return { arrow: 'top-right', steps: [
+      'Tap the <strong>menu</strong> button <i class="bi bi-three-dots-vertical"></i>.',
+      'Tap <strong>Add app to Home screen</strong> (or <strong>Add to Home screen</strong>).',
+      'Tap <strong>Add</strong>.',
+    ] };
+  }
+  if (/android/i.test(ua)) {
+    return { arrow: 'top-right', steps: [
+      'Tap the <strong>menu</strong> button <i class="bi bi-three-dots-vertical"></i> at the top right.',
+      'Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.',
+      'Tap <strong>Install</strong>.',
+    ] };
+  }
+  const isMac = /macintosh/i.test(ua);
+  const bookmarkKeys = isMac ? '<strong>⌘ Command + D</strong>' : '<strong>Ctrl + D</strong>';
+  if (/Firefox/i.test(ua)) {
+    return { arrow: 'none', steps: [
+      `Firefox can't install apps, so bookmark SCI Connect instead: press ${bookmarkKeys}, or click the star <i class="bi bi-star"></i> in the address bar.`,
+      'Click <strong>Save</strong>. SCI Connect is now in your bookmarks.',
+      'Want it as an app with its own icon? Open sciconnect.net in Chrome, Edge or Safari and tap the fox banner again.',
+    ] };
+  }
+  if (isMac && /Version\/\d+.*Safari/i.test(ua) && !/Chrome|Edg\//i.test(ua)) {
+    return { arrow: 'none', steps: [
+      'In the menu bar at the top of the screen, click <strong>File</strong>.',
+      'Click <strong>Add to Dock</strong>, then <strong>Add</strong>. SCI Connect will sit in your Dock with the fox icon.',
+      `Older Mac? Bookmark it instead: press ${bookmarkKeys}.`,
+    ] };
+  }
+  return { arrow: 'top-right', steps: [
+    'Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the browser menu and choose <strong>Install SCI Connect</strong>.',
+    `Click <strong>Install</strong>. SCI Connect will open in its own window and show up in your ${isMac ? 'Launchpad and Dock' : 'Start menu'}.`,
+    `No install icon? Bookmark it instead: press ${bookmarkKeys}.`,
+  ] };
+};
+const openAppGuide = () => {
+  if (!appGuide) return;
+  const { arrow, steps } = appGuideSteps();
+  appGuide.querySelector('[data-app-guide-steps]').innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
+  appGuide.dataset.arrow = arrow;
+  appGuide.hidden = false;
+  document.body.classList.add('disclaimer-lock');
+};
+const closeAppGuide = () => {
+  if (!appGuide || appGuide.hidden) return;
+  appGuide.hidden = true;
+  document.body.classList.remove('disclaimer-lock');
+  if (window.location.hash === '#get-app') history.replaceState(null, '', window.location.pathname + window.location.search);
+};
+if (appGuide) {
+  appGuide.addEventListener('click', async (event) => {
+    if (event.target === appGuide || event.target.closest('[data-app-guide-close]')) closeAppGuide();
+    const copyButton = event.target.closest('[data-copy-site-link]');
+    if (copyButton) {
+      try {
+        await navigator.clipboard.writeText(window.location.origin);
+        copyButton.textContent = 'Copied!';
+      } catch (error) {
+        copyButton.textContent = window.location.host;
+      }
+    }
+  });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAppGuide(); });
+  document.querySelectorAll('[data-app-guide-open]').forEach((link) => link.addEventListener('click', (event) => {
+    event.preventDefault();
+    openAppGuide();
+  }));
+  const openFromHash = () => { if (window.location.hash === '#get-app') openAppGuide(); };
+  window.addEventListener('hashchange', openFromHash);
+  openFromHash();
+}
+
 const appBanner = document.querySelector('[data-app-banner]');
 if (appBanner) {
   const dismissKey = 'sciAppBannerDismissed';
   const installButton = appBanner.querySelector('[data-app-install]');
-  const bannerText = appBanner.querySelector('[data-app-banner-text]');
   const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   let dismissed = false;
   try { dismissed = window.localStorage.getItem(dismissKey) === '1'; } catch (error) { dismissed = false; }
@@ -377,17 +503,14 @@ if (appBanner) {
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       installPrompt = event;
-      installButton.hidden = false;
       appBanner.hidden = false;
     });
-    if (/iphone|ipad|ipod/i.test(window.navigator.userAgent)) {
-      bannerText.innerHTML = 'Tap the Share button <i class="bi bi-box-arrow-up"></i>, then <strong>Add to Home Screen</strong>.';
-      appBanner.hidden = false;
-    }
+    appBanner.hidden = false;
   }
 
+  // Where the browser offers one-tap install (Android Chrome), use it; everywhere else show the guide.
   installButton.addEventListener('click', async () => {
-    if (!installPrompt) return;
+    if (!installPrompt) { openAppGuide(); return; }
     installPrompt.prompt();
     await installPrompt.userChoice;
     installPrompt = null;
