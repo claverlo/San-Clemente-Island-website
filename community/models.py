@@ -29,6 +29,23 @@ class EmailCode(models.Model):
         return f"{self.get_purpose_display()} code for {self.user}"
 
 
+class Passkey(models.Model):
+    """A Face ID / fingerprint / Windows Hello sign-in set up on one of the member's devices."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passkeys")
+    credential_id = models.CharField(max_length=512, unique=True)
+    public_key = models.TextField()
+    sign_count = models.PositiveBigIntegerField(default=0)
+    name = models.CharField(max_length=60, default="This device")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.name} for {self.user}"
+
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     phone = models.CharField(max_length=30, blank=True)

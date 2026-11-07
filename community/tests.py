@@ -763,3 +763,132 @@ class OneTimeCodeAndLoginSafetyTests(TestCase):
             self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "nope"})
         self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "RightPass123!"})
         self.assertIn("_auth_user_id", self.client.session)
+
+
+class FakeFaceIdDevice:
+    """Acts like a phone's Face ID / fingerprint passkey so the full sign-in flow can be tested."""
+
+    def __init__(self, rp_id="testserver", origin="https://testserver"):
+        import os
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.rp_id, self.origin = rp_id, origin
+        self.key = ec.generate_private_key(ec.SECP256R1())
+        self.credential_id = os.urandom(32)
+        self.count = 0
+
+    @staticmethod
+    def b64(data):
+        import base64
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    def client_data(self, kind, challenge):
+        import json as _json
+        return _json.dumps({"type": kind, "challenge": challenge, "origin": self.origin}).encode()
+
+    def rp_hash(self):
+        import hashlib
+        return hashlib.sha256(self.rp_id.encode()).digest()
+
+    def create(self, options):
+        import cbor2
+        numbers = self.key.public_key().public_numbers()
+        cose = cbor2.dumps({1: 2, 3: -7, -1: 1, -2: numbers.x.to_bytes(32, "big"), -3: numbers.y.to_bytes(32, "big")})
+        auth_data = (self.rp_hash() + bytes([0x45]) + (0).to_bytes(4, "big") + bytes(16)
+                     + len(self.credential_id).to_bytes(2, "big") + self.credential_id + cose)
+        attestation = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": auth_data})
+        cid = self.b64(self.credential_id)
+        return {"id": cid, "rawId": cid, "type": "public-key", "response": {
+            "clientDataJSON": self.b64(self.client_data("webauthn.create", options["challenge"])),
+            "attestationObject": self.b64(attestation), "transports": ["internal"]}, "clientExtensionResults": {}}
+
+    def sign_in(self, options):
+        import hashlib
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.count += 1
+        client_data = self.client_data("webauthn.get", options["challenge"])
+        auth_data = self.rp_hash() + bytes([0x05]) + self.count.to_bytes(4, "big")
+        signature = self.key.sign(auth_data + hashlib.sha256(client_data).digest(), ec.ECDSA(hashes.SHA256()))
+        cid = self.b64(self.credential_id)
+        return {"id": cid, "rawId": cid, "type": "public-key", "response": {
+            "clientDataJSON": self.b64(client_data), "authenticatorData": self.b64(auth_data),
+            "signature": self.b64(signature), "userHandle": None}, "clientExtensionResults": {}}
+
+
+class FaceIdSignInTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("ana@example.com", email="ana@example.com", password="RightPass123!")
+        Profile.objects.create(user=self.user, email_verified=True)
+        self.device = FakeFaceIdDevice()
+
+    def post_json(self, name, data=None):
+        import json as _json
+        return self.client.post(reverse(name), _json.dumps(data or {}), content_type="application/json")
+
+    def turn_on(self):
+        self.client.force_login(self.user)
+        options = self.post_json("passkey_register_options").json()
+        self.assertEqual(options["authenticatorSelection"]["userVerification"], "required")
+        return self.post_json("passkey_register_verify", self.device.create(options))
+
+    def test_turn_on_then_sign_in_with_face_id(self):
+        self.assertTrue(self.turn_on().json()["ok"])
+        from community.models import Passkey
+        self.assertEqual(Passkey.objects.filter(user=self.user).count(), 1)
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        response = self.post_json("passkey_login_verify", self.device.sign_in(options))
+        self.assertEqual(response.json()["redirect"], reverse("dashboard"))
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
+        self.assertEqual(int(self.client.cookies["sessionid"]["max-age"]), 30 * 24 * 60 * 60)
+
+    def test_a_device_that_was_never_set_up_is_refused(self):
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        response = self.post_json("passkey_login_verify", FakeFaceIdDevice().sign_in(options))
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_a_faked_signature_is_refused(self):
+        self.turn_on()
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        attempt = self.device.sign_in(options)
+        attempt["response"]["signature"] = FakeFaceIdDevice().sign_in(options)["response"]["signature"]
+        self.assertEqual(self.post_json("passkey_login_verify", attempt).status_code, 400)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_reusing_an_old_challenge_is_refused(self):
+        self.turn_on()
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        attempt = self.device.sign_in(options)
+        self.post_json("passkey_login_verify", attempt)
+        self.client.logout()
+        self.assertEqual(self.post_json("passkey_login_verify", attempt).status_code, 400)
+
+    def test_face_id_unlocks_an_account_locked_by_wrong_passwords(self):
+        self.turn_on()
+        self.client.logout()
+        for _ in range(4):
+            self.client.post(reverse("login"), {"username": "ana@example.com", "password": "nope"})
+        self.assertTrue(Profile.objects.get(user=self.user).login_locked)
+        options = self.post_json("passkey_login_options").json()
+        self.post_json("passkey_login_verify", self.device.sign_in(options))
+        self.assertFalse(Profile.objects.get(user=self.user).login_locked)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_must_be_signed_in_to_turn_on(self):
+        self.assertEqual(self.post_json("passkey_register_options").status_code, 302)
+
+    def test_remove_a_device(self):
+        self.turn_on()
+        key = self.user.passkeys.get()
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "Turn on for this device")
+        self.assertContains(page, key.name)
+        self.client.post(reverse("passkey_delete", args=[key.pk]))
+        self.assertFalse(self.user.passkeys.exists())
+
+    def test_login_page_offers_face_id(self):
+        self.assertContains(self.client.get(reverse("login")), "Sign in with Face ID / fingerprint")

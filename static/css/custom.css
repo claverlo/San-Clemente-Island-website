@@ -1659,3 +1659,44 @@ svg {
     height:1.1rem;
     flex:none
 }
+.passkey-list {
+    list-style:none;
+    padding:0;
+    margin:0 0 .75rem;
+    display:grid;
+    gap:.5rem
+}
+.passkey-list li {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:.75rem;
+    padding:.5rem .65rem;
+    border:1px solid #dbe3ea;
+    border-radius:6px
+}
+.passkey-list small {
+    display:block;
+    color:#6c7a89
+}
+.passkey-login {
+    margin:.75rem 0 1rem
+}
+.passkey-or {
+    display:flex;
+    align-items:center;
+    gap:.75rem;
+    margin-top:1rem;
+    color:#6c7a89;
+    font-size:.85rem
+}
+.passkey-or::before,
+.passkey-or::after {
+    content:"";
+    flex:1;
+    border-top:1px solid #dbe3ea
+}
+.trust-device .form-check-input {
+    float:none;
+    margin-left:0
+}

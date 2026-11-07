@@ -588,6 +588,7 @@ def dashboard(request):
         "phone_code_sent": bool(profile.phone_verification_sent_at),
         "profile_form": form,
         "alerts_form": alerts_form,
+        "passkeys": request.user.passkeys.all(),
         "listings": request.user.listings.all(),
         "inquiries": sum((list(x.messages.all()) for x in request.user.listings.all()), []),
         "lost_found_reports": report_queryset,
