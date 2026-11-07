@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% block content %}<div class="auth-wrap"><div class="auth-panel"><div class="brand-mark large">SCI</div><p class="eyebrow dark">ONE LAST STEP</p><h1>Check your email</h1>
+{% extends 'base.html' %}{% load static %}{% block content %}<div class="auth-wrap"><div class="auth-panel"><img class="auth-logo" src="{% static 'img/sci-logo.png' %}" alt="San Clemente Island" width="480" height="452"><p class="eyebrow dark">ONE LAST STEP</p><h1>Check your email</h1>
 <p class="small text-muted mb-3">We emailed a 6-digit code to <strong>{{ user.email }}</strong>. Type it below to verify your email. It may take a minute to arrive, so check your spam or junk folder too.</p>
 <form method="post">{% csrf_token %}
 <p><label for="{{ form.code.id_for_label }}">6-digit code:</label>{{ form.code }}</p>
