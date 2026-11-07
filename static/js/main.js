@@ -573,3 +573,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   fit();
 })();
+
+// Remember the email typed on the login / reset forms on this device, so people don't retype it every time.
+(() => {
+  const KEY = 'sci-last-email';
+  document.querySelectorAll('[data-remember-form]').forEach((form) => {
+    const input = form.querySelector('[data-remember-email]');
+    if (!input) return;
+    try {
+      const saved = localStorage.getItem(KEY);
+      if (saved && !input.value) {
+        input.value = saved;
+        const password = form.querySelector('input[type="password"]');
+        if (password && !input.hasAttribute('autofocus')) password.focus();
+      }
+    } catch (e) { /* storage blocked: nothing to fill */ }
+    form.addEventListener('submit', () => {
+      try { if (input.value.includes('@')) localStorage.setItem(KEY, input.value.trim()); } catch (e) { /* ignore */ }
+    });
+  });
+})();

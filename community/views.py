@@ -1,5 +1,7 @@
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from datetime import timedelta
+
+from django.contrib.auth import login, logout, views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.db.models import Q
@@ -12,8 +14,10 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from random import randint
 from .chat import ai_answer, matching_messages, shrink_photo, with_replies
-from .forms import AlertSettingsForm, ChatMessageForm, DeleteAccountForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm
-from .models import Announcement, ChatMessage, ContactMessage, ContentReport, Event, Listing, ListingImage, LostFound, Profile, LOST_FOUND_ALERT
+from .backends import find_accounts
+from .codes import check_code, seconds_until_resend, send_code
+from .forms import AlertSettingsForm, ChatMessageForm, DeleteAccountForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm, ResetCodeForm, ResetRequestForm, VerifyCodeForm
+from .models import Announcement, ChatMessage, ContactMessage, ContentReport, EmailCode, Event, Listing, ListingImage, LostFound, Profile, LOST_FOUND_ALERT
 from .notifications import notify_subscribers
 from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
@@ -28,22 +32,116 @@ def send_verification_email(request, profile):
     verification_url = request.build_absolute_uri(
         reverse("verify_email", args=[profile.verification_token])
     )
-    send_mail(
-        "Verify your SCI List email",
-        f"Verify your SCI List account by opening this link:\n\n{verification_url}",
-        None,
-        [profile.user.email],
-        fail_silently=False,
-    )
+    send_code(profile.user, EmailCode.VERIFY, extra_text=f"\nOr open this link instead:\n{verification_url}\n")
     return verification_url
+
+
+TRUSTED_DEVICE_AGE = timedelta(days=30)
+
+
+class LoginView(auth_views.LoginView):
+    """Log in with email + password. "Trust this device" keeps them signed in for 30 days instead of 12 hours."""
+    template_name = "registration/login.html"
+
+    def get_form_class(self):
+        from .forms import StyledAuthenticationForm
+        return StyledAuthenticationForm
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        if form.cleaned_data.get("trust_device"):
+            self.request.session.set_expiry(int(TRUSTED_DEVICE_AGE.total_seconds()))
+        return response
+
+
+@login_required
+def verify_code(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    if profile.email_verified:
+        messages.info(request, "Your email is already verified.")
+        return redirect("dashboard")
+    form = VerifyCodeForm(request.POST if request.method == "POST" and "code" in request.POST else None)
+    if request.method == "POST" and request.POST.get("action") == "resend":
+        wait = seconds_until_resend(request.user, EmailCode.VERIFY)
+        if wait:
+            messages.warning(request, f"Please wait {wait} seconds before asking for another code.")
+        else:
+            try:
+                send_verification_email(request, profile)
+                messages.success(request, f"A new code was sent to {request.user.email}.")
+            except Exception:
+                messages.error(request, "We couldn't send the email right now. Please try again in a minute.")
+        return redirect("verify_code")
+    if form.is_bound and form.is_valid():
+        if check_code(request.user, EmailCode.VERIFY, form.cleaned_data["code"]):
+            profile.email_verified = True
+            profile.save(update_fields=["email_verified"])
+            messages.success(request, "Your email is verified. You can post now!")
+            return redirect("dashboard")
+        form.add_error("code", "That code isn't right or has expired. Check the newest email, or send a new code.")
+    return render(request, "registration/verify_code.html", {"form": form})
+
+
+RESET_SESSION_KEY = "reset_email"
+
+
+def password_reset_request(request):
+    form = ResetRequestForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        email = form.cleaned_data["email"].strip().lower()
+        request.session[RESET_SESSION_KEY] = email
+        accounts = [user for user in find_accounts(email) if user.is_active and user.email]
+        if accounts and not seconds_until_resend(accounts[0], EmailCode.RESET):
+            try:
+                send_code(accounts[0], EmailCode.RESET)
+            except Exception:
+                messages.error(request, "We couldn't send the email right now. Please try again in a minute.")
+                return redirect("password_reset")
+        return redirect("password_reset_code")
+    return render(request, "registration/password_reset_form.html", {"form": form})
+
+
+def password_reset_code(request):
+    email = request.session.get(RESET_SESSION_KEY)
+    if not email:
+        return redirect("password_reset")
+    accounts = [user for user in find_accounts(email) if user.is_active and user.email]
+    user = accounts[0] if accounts else None
+    if request.method == "POST" and request.POST.get("action") == "resend":
+        if user:
+            wait = seconds_until_resend(user, EmailCode.RESET)
+            if wait:
+                messages.warning(request, f"Please wait {wait} seconds before asking for another code.")
+            else:
+                send_code(user, EmailCode.RESET)
+                messages.success(request, "A new code is on its way.")
+        else:
+            messages.success(request, "A new code is on its way.")
+        return redirect("password_reset_code")
+    form = ResetCodeForm(user, request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        if user and check_code(user, EmailCode.RESET, form.cleaned_data["code"]):
+            user.set_password(form.cleaned_data["new_password1"])
+            user.save()
+            profile, _ = Profile.objects.get_or_create(user=user)
+            profile.failed_logins = 0
+            profile.login_locked = False
+            profile.email_verified = True  # they just proved they can read this inbox
+            profile.save(update_fields=["failed_logins", "login_locked", "email_verified"])
+            request.session.pop(RESET_SESSION_KEY, None)
+            login(request, user, backend="community.backends.EmailOrUsernameBackend")
+            messages.success(request, "Your password was changed and you're signed in.")
+            return redirect("dashboard")
+        form.add_error("code", "That code isn't right or has expired. Check the newest email, or send a new code.")
+    return render(request, "registration/password_reset_code.html", {"form": form, "email": email})
 
 def needs_verified_email(request):
     """Return a redirect for signed-in members who haven't verified their email yet, else None."""
     profile, _ = Profile.objects.get_or_create(user=request.user)
     if profile.can_post:
         return None
-    messages.error(request, "Please verify your email before posting. Check your inbox for the link, or resend it below.")
-    return redirect("dashboard")
+    messages.error(request, "Please verify your email before posting. Enter the 6-digit code we emailed you.")
+    return redirect("verify_code")
 
 def run_moderation(text_values, files):
     status, reason = moderate_text_fields(*text_values)
@@ -444,10 +542,10 @@ def register(request):
         login(request, user)
         try:
             send_verification_email(request, profile)
-            messages.success(request, f"Account created! We sent a link to {user.email}. Open it to verify your email, then you can post.")
+            messages.success(request, f"Account created! We emailed a 6-digit code to {user.email}. Enter it below to verify your email.")
         except Exception:
-            messages.warning(request, "Account created, but we couldn't send the verification email. Use Resend below to try again.")
-        return redirect("dashboard")
+            messages.warning(request, "Account created, but we couldn't send the code. Tap \u201cSend a new code\u201d to try again.")
+        return redirect("verify_code")
     return render(request, "registration/register.html", {"form": form})
 
 def verify_email(request, token):
@@ -462,10 +560,8 @@ def resend_verification(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
     if profile.email_verified:
         messages.info(request, "Your email is already verified.")
-    elif request.method == "POST":
-        send_verification_email(request, profile)
-        messages.success(request, "A new verification email was sent.")
-    return redirect("dashboard")
+        return redirect("dashboard")
+    return redirect("verify_code")
 
 @login_required
 def dashboard(request):
