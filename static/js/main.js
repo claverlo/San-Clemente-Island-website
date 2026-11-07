@@ -538,3 +538,12 @@ if (appBanner) {
     try { window.localStorage.setItem(dismissKey, '1'); } catch (error) { /* banner just comes back next visit */ }
   });
 }
+
+// Email alerts: typing in the "Other" box ticks its checkbox; ticking the box jumps to the text field.
+document.addEventListener('DOMContentLoaded', () => {
+  const other = document.querySelector('[data-alert-other]');
+  const words = document.querySelector('[data-alert-keywords]');
+  if (!other || !words) return;
+  words.addEventListener('input', () => { other.checked = words.value.trim() !== ''; });
+  other.addEventListener('change', () => { if (other.checked) words.focus(); });
+});

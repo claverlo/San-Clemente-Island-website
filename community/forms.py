@@ -288,9 +288,32 @@ class AlertSettingsForm(forms.Form):
         label="Email me when someone posts in:",
     )
 
+    alert_other = forms.BooleanField(required=False, label="Other")
+    alert_keywords = forms.CharField(
+        required=False, max_length=300, label="What to watch for",
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. shoes, slippers, socks", "data-alert-keywords": ""}),
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["alert_categories"].choices = alert_choices()
+        self.fields["alert_other"].widget.attrs.update({"data-alert-other": ""})
+
+    def clean(self):
+        cleaned = super().clean()
+        words = []
+        for word in (cleaned.get("alert_keywords") or "").split(","):
+            word = " ".join(word.split())
+            if word and word.lower() not in [w.lower() for w in words]:
+                words.append(word)
+        if any(len(word) > 40 for word in words):
+            self.add_error("alert_keywords", "Keep each word or phrase under 40 letters.")
+        if len(words) > 10:
+            self.add_error("alert_keywords", "You can watch for up to 10 things.")
+        if cleaned.get("alert_other") and not words:
+            self.add_error("alert_keywords", "Type what you want to hear about, like shoes or slippers.")
+        cleaned["alert_keywords"] = ", ".join(words) if cleaned.get("alert_other") else ""
+        return cleaned
 
 class DeleteAccountForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "current-password"}), label="Enter your password to confirm")
