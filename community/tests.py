@@ -892,3 +892,81 @@ class FaceIdSignInTests(TestCase):
 
     def test_login_page_offers_face_id(self):
         self.assertContains(self.client.get(reverse("login")), "Sign in with Face ID / fingerprint")
+
+
+class FederalHolidayTests(TestCase):
+    """Dates checked against OPM's published federal holiday schedules."""
+
+    def test_2026_dates_match_opm(self):
+        from datetime import date
+        from community.holidays import holidays_in_year
+        got = {h.slug: (h.date, h.observed) for h in holidays_in_year(2026)}
+        self.assertEqual(got["mlk-day"][0], date(2026, 1, 19))
+        self.assertEqual(got["washingtons-birthday"][0], date(2026, 2, 16))
+        self.assertEqual(got["memorial-day"][0], date(2026, 5, 25))
+        self.assertEqual(got["independence-day"], (date(2026, 7, 4), date(2026, 7, 3)))
+        self.assertEqual(got["labor-day"][0], date(2026, 9, 7))
+        self.assertEqual(got["columbus-day"][0], date(2026, 10, 12))
+        self.assertEqual(got["thanksgiving-day"][0], date(2026, 11, 26))
+        self.assertNotIn("inauguration-day", got)
+
+    def test_2027_weekend_holidays_move_like_opm_says(self):
+        from datetime import date
+        from community.holidays import holidays_in_year
+        got = {h.slug: h.observed for h in holidays_in_year(2027)}
+        self.assertEqual(got["juneteenth"], date(2027, 6, 18))
+        self.assertEqual(got["independence-day"], date(2027, 7, 5))
+        self.assertEqual(got["christmas-day"], date(2027, 12, 24))
+        self.assertEqual(got["mlk-day"], date(2027, 1, 18))
+
+    def test_inauguration_day_only_every_four_years(self):
+        from datetime import date
+        from community.holidays import inauguration_day
+        self.assertEqual(inauguration_day(2029).date, date(2029, 1, 20))
+        self.assertEqual(inauguration_day(2013).date, date(2013, 1, 21))  # the 20th was a Sunday
+        self.assertIsNone(inauguration_day(2027))
+
+    def test_each_month_shows_only_its_own_holidays(self):
+        from community.holidays import holidays_in_month
+        slugs = lambda y, m: [h.slug for h in holidays_in_month(y, m)]
+        self.assertEqual(slugs(2026, 11), ["veterans-day", "thanksgiving-day"])
+        self.assertEqual(slugs(2026, 10), ["columbus-day"])
+        self.assertEqual(slugs(2026, 12), ["christmas-day"])
+        self.assertEqual(slugs(2026, 3), [])
+        self.assertEqual(slugs(2029, 1), ["new-years-day", "mlk-day", "inauguration-day"])
+
+    def test_popular_days_are_added_to_their_month(self):
+        from datetime import date
+        from community.holidays import easter_sunday, month_highlights
+        slugs = lambda y, m: [h.slug for h in month_highlights(y, m)]
+        self.assertEqual(slugs(2026, 2), ["valentines-day", "washingtons-birthday"])
+        self.assertEqual(slugs(2026, 5), ["mothers-day", "memorial-day"])
+        self.assertEqual(slugs(2026, 6), ["juneteenth", "fathers-day"])
+        self.assertEqual(slugs(2026, 10), ["columbus-day", "halloween"])
+        self.assertEqual(slugs(2026, 12), ["christmas-day", "new-years-eve"])
+        self.assertEqual(slugs(2026, 8), [])
+        self.assertEqual([easter_sunday(y) for y in (2024, 2025, 2026, 2027)],
+                         [date(2024, 3, 31), date(2025, 4, 20), date(2026, 4, 5), date(2027, 3, 28)])
+        self.assertEqual(slugs(2027, 3), ["st-patricks-day", "easter"])
+
+    def test_every_holiday_has_a_picture(self):
+        from pathlib import Path
+        from django.conf import settings
+        from community.holidays import holidays_in_year, observances_in_year
+        folder = Path(settings.BASE_DIR) / "static" / "images" / "holidays"
+        for holiday in holidays_in_year(2029) + observances_in_year(2029):
+            self.assertTrue((folder / f"{holiday.slug}.svg").exists(), holiday.slug)
+
+    def test_homepage_puts_this_months_holidays_first(self):
+        from datetime import date
+        from unittest import mock
+        with mock.patch("community.views.timezone.localdate", return_value=date(2026, 11, 7)):
+            page = self.client.get(reverse("home")).content.decode()
+        self.assertIn('holiday-slide active"><img src="/static/images/holidays/veterans-day.svg"', page)
+        self.assertIn("thanksgiving-day.svg", page)
+        self.assertNotIn("columbus-day.svg", page)
+        self.assertLess(page.index("thanksgiving-day.svg"), page.index("homepage-diver.jpg"))
+        with mock.patch("community.views.timezone.localdate", return_value=date(2026, 8, 7)):
+            page = self.client.get(reverse("home")).content.decode()
+        self.assertNotIn("holiday-slide", page)
+        self.assertIn('class="hero-slide active" src="/static/images/homepage-diver.jpg"', page)
