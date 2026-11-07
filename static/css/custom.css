@@ -1728,7 +1728,7 @@ svg {
 .holiday-slide figcaption {
     position:absolute;
     left:1rem;
-    top:1rem;
+    bottom:2.4rem;
     max-width:calc(100% - 2rem);
     padding:.4rem .75rem;
     border-radius:4px;

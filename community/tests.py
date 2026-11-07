@@ -955,17 +955,17 @@ class FederalHolidayTests(TestCase):
         from community.holidays import holidays_in_year, observances_in_year
         folder = Path(settings.BASE_DIR) / "static" / "images" / "holidays"
         for holiday in holidays_in_year(2029) + observances_in_year(2029):
-            self.assertTrue((folder / f"{holiday.slug}.svg").exists(), holiday.slug)
+            self.assertTrue((folder / f"{holiday.slug}.jpg").exists(), holiday.slug)
 
     def test_homepage_puts_this_months_holidays_first(self):
         from datetime import date
         from unittest import mock
         with mock.patch("community.views.timezone.localdate", return_value=date(2026, 11, 7)):
             page = self.client.get(reverse("home")).content.decode()
-        self.assertIn('holiday-slide active"><img src="/static/images/holidays/veterans-day.svg"', page)
-        self.assertIn("thanksgiving-day.svg", page)
-        self.assertNotIn("columbus-day.svg", page)
-        self.assertLess(page.index("thanksgiving-day.svg"), page.index("homepage-diver.jpg"))
+        self.assertIn('holiday-slide active"><img src="/static/images/holidays/veterans-day.jpg"', page)
+        self.assertIn("thanksgiving-day.jpg", page)
+        self.assertNotIn("columbus-day.jpg", page)
+        self.assertLess(page.index("thanksgiving-day.jpg"), page.index("homepage-diver.jpg"))
         with mock.patch("community.views.timezone.localdate", return_value=date(2026, 8, 7)):
             page = self.client.get(reverse("home")).content.decode()
         self.assertNotIn("holiday-slide", page)
