@@ -41,7 +41,7 @@
 	<div id="chat-bottom"></div>
 </div>
 
-<p class="chat-warning"><i class="bi bi-shield-exclamation"></i> Everyone can read this chat. Do not share sensitive information like passwords, bank or card numbers, SSNs, or your home address.</p>
+<p class="chat-warning"><i class="bi bi-shield-exclamation"></i> Please do not share any sensitive information.</p>
 {% if user.is_authenticated and not can_post %}
 <div class="chat-compose signed-out"><a href="{% url 'dashboard' %}" target="_top">Verify your email</a> to post in the chat.</div>
 {% elif user.is_authenticated %}

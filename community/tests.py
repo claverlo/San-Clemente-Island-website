@@ -505,7 +505,7 @@ class SessionAndChatNoticeTests(TestCase):
         self.assertEqual(int(cookie["max-age"]), 12 * 60 * 60)
 
     def test_chat_warns_against_sharing_sensitive_information(self):
-        self.assertContains(self.client.get(reverse("chat")), "Do not share sensitive information")
+        self.assertContains(self.client.get(reverse("chat")), "Please do not share any sensitive information.")
 
 
 

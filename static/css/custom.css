@@ -1606,3 +1606,32 @@ svg {
 .dashboard-quick a[href="#delete-account"] {
     color:#b02a37
 }
+/* Top menu: one tidy row when everything fits, otherwise the menu button (main.js decides by measuring) */
+.navbar .nav-link,
+.navbar .btn {
+    white-space:nowrap
+}
+.navbar.navbar-expand-xl .nav-link {
+    margin:0;
+    padding-left:.5rem;
+    padding-right:.5rem
+}
+.navbar.nav-collapsed .navbar-collapse {
+    max-height:calc(100vh - 90px);
+    overflow-y:auto
+}
+.navbar.nav-collapsed .navbar-nav {
+    align-items:stretch!important;
+    padding:.5rem 0
+}
+.navbar.nav-collapsed .nav-link {
+    padding:.65rem 0;
+    font-size:1rem;
+    border-bottom:1px solid rgba(255,255,255,.08)
+}
+.navbar.nav-collapsed .navbar-nav form .btn,
+.navbar.nav-collapsed .navbar-nav > .nav-item > .btn {
+    margin:.75rem 0 0!important;
+    width:100%;
+    padding:.55rem
+}

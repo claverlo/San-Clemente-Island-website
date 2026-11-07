@@ -547,3 +547,29 @@ document.addEventListener('DOMContentLoaded', () => {
   words.addEventListener('input', () => { other.checked = words.value.trim() !== ''; });
   other.addEventListener('change', () => { if (other.checked) words.focus(); });
 });
+
+// Responsive top menu: show the links in one row only when they all fit; otherwise use the menu button.
+(() => {
+  const nav = document.querySelector('[data-auto-nav]');
+  if (!nav) return;
+  const container = nav.querySelector('.container');
+  const fit = () => {
+    // Measure the real one-row layout (without the menu-button styles), then pick.
+    nav.classList.remove('nav-collapsed');
+    nav.classList.add('navbar-expand-xl');
+    const wide = window.matchMedia('(min-width: 1200px)').matches;
+    const fits = wide && container.scrollWidth <= container.clientWidth + 1;
+    nav.classList.toggle('navbar-expand-xl', fits);
+    nav.classList.toggle('nav-collapsed', !fits);
+  };
+  let frame = 0;
+  window.addEventListener('resize', () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  window.addEventListener('load', fit);
+  // Re-check whenever the links change size (for example when the website's font finishes loading).
+  if (window.ResizeObserver) {
+    const observer = new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); });
+    nav.querySelectorAll('.navbar-brand, .navbar-nav .nav-link, .navbar-nav .btn').forEach((el) => observer.observe(el));
+  }
+  fit();
+})();
