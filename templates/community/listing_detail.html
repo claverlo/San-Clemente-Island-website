@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'base.html' %}{% load community_extras %}
 {% block content %}
 <div class="listing-safety-ribbon" role="note" aria-label="Marketplace notice">
 	<div class="listing-safety-track">
@@ -80,7 +80,7 @@
 				<i class="bi bi-person-circle"></i>
 				<div>
 					<small>CONTACT</small>
-					<strong>{{ listing.seller.get_full_name|default:listing.seller.username }}</strong>
+					<strong>{{ listing.seller|display_name }}</strong>
 				</div>
 			</div>
 

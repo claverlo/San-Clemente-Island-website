@@ -12,6 +12,8 @@ from django.db.models import Q
 from django.utils import timezone
 from PIL import Image, ImageOps
 
+from .templatetags.community_extras import display_name
+
 MAX_PHOTO_SIDE = 1600
 STOP_WORDS = {
     "a", "an", "and", "any", "anybody", "anyone", "are", "at", "be", "can", "could", "do", "does", "for",
@@ -71,7 +73,7 @@ def ai_answer(question, text_messages, photo_messages):
     now = timezone.localtime()
     lines = [f"Current date and time: {now:%A, %B %d %Y, %I:%M %p}.", "Chat messages:"]
     for message in text_messages:
-        lines.append(f"[id {message.pk}] {message.user.username} at {timezone.localtime(message.created_at):%a %b %d, %I:%M %p}: {message.body}")
+        lines.append(f"[id {message.pk}] {display_name(message.user)} at {timezone.localtime(message.created_at):%a %b %d, %I:%M %p}: {message.body}")
     content = [{"type": "text", "text": "\n".join(lines)}]
     for message in photo_messages:
         try:
@@ -79,7 +81,7 @@ def ai_answer(question, text_messages, photo_messages):
                 encoded = base64.b64encode(photo.read()).decode("utf-8")
         except (OSError, ValueError):
             continue
-        content.append({"type": "text", "text": f"[id {message.pk}] Photo posted by {message.user.username} at {timezone.localtime(message.created_at):%a %b %d, %I:%M %p}. Caption: {message.body or '(none)'}"})
+        content.append({"type": "text", "text": f"[id {message.pk}] Photo posted by {display_name(message.user)} at {timezone.localtime(message.created_at):%a %b %d, %I:%M %p}. Caption: {message.body or '(none)'}"})
         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded}", "detail": "low"}})
 
     payload = {

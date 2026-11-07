@@ -121,38 +121,58 @@ class CommunityTests(TestCase):
         self.assertTrue(Listing.objects.filter(pk=self.listing.pk).exists())
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-    def test_registration_with_phone_can_reach_listing_form(self):
+    def test_signup_needs_only_email_name_and_password(self):
         response = self.client.post(reverse("register"), {
-            "username": "newuser", "email": "new@example.com", "phone": "555-555-0199",
+            "email": "New.Member@Example.com", "first_name": "Dana",
             "password1": "StrongPass123!", "password2": "StrongPass123!",
-            "consent_privacy": "on",
         })
         self.assertRedirects(response, reverse("dashboard"))
-        profile = Profile.objects.get(user__username="newuser")
-        self.assertEqual(profile.phone, "555-555-0199")
-        self.assertRedirects(self.client.get(reverse("listing_create")), reverse("dashboard"))
-        self.client.get(reverse("verify_email", args=[profile.verification_token]))
-        response = self.client.get(reverse("listing_create"))
-        self.assertEqual(response.status_code, 200)
-
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-    def test_registration_allows_email_signup_without_phone_and_posting_form(self):
-        response = self.client.post(reverse("register"), {
-            "username": "emailonly", "email": "emailonly@example.com", "phone": "",
-            "password1": "StrongPass123!", "password2": "StrongPass123!",
-            "consent_privacy": "on",
-        })
-        self.assertRedirects(response, reverse("dashboard"))
-
-        profile = Profile.objects.get(user__username="emailonly")
+        user = User.objects.get(email="new.member@example.com")
+        self.assertEqual(user.username, "new.member@example.com")
+        profile = Profile.objects.get(user=user)
         self.assertEqual(profile.phone, "")
         self.assertFalse(profile.email_verified)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(str(profile.verification_token), mail.outbox[0].body)
 
         self.client.get(reverse("verify_email", args=[profile.verification_token]))
-        response = self.client.get(reverse("listing_create"))
-        self.assertEqual(response.status_code, 200)
+        response = self.client.post(reverse("listing_create"), {
+            "title": "No phone lamp", "category": "For Sale", "price": "5.00", "location": "Wilson Cove",
+            "description": "Works well.", "contact_email": "new.member@example.com", "contact_phone": "",
+        })
+        self.assertTrue(Listing.all_objects.filter(title="No phone lamp", contact_phone="").exists())
+
+    def test_signup_form_has_no_phone_or_text_consent(self):
+        page = self.client.get(reverse("register")).content.decode()
+        self.assertNotIn('name="phone"', page)
+        self.assertNotIn('name="username"', page)
+        self.assertNotIn("consent_privacy", page)
+
+    def test_signup_rejects_an_email_already_in_use(self):
+        User.objects.create_user("old", email="taken@example.com", password="x")
+        response = self.client.post(reverse("register"), {
+            "email": "TAKEN@example.com", "first_name": "Sam",
+            "password1": "StrongPass123!", "password2": "StrongPass123!",
+        })
+        self.assertContains(response, "already uses this email")
+
+    def test_login_with_email_or_old_username(self):
+        User.objects.create_user("oldname", email="Old@Example.com", password="testpass123")
+        response = self.client.post(reverse("login"), {"username": "old@example.com", "password": "testpass123"})
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+        self.client.logout()
+        response = self.client.post(reverse("login"), {"username": "oldname", "password": "testpass123"})
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+        self.client.logout()
+        response = self.client.post(reverse("login"), {"username": "old@example.com", "password": "wrong"})
+        self.assertContains(response, "email and password don")
+
+    def test_chat_never_shows_an_email_as_the_name(self):
+        user = User.objects.create_user("pat@example.com", email="pat@example.com", password="x")
+        ChatMessage.objects.create(user=user, body="hello")
+        page = self.client.get(reverse("chat")).content.decode()
+        self.assertNotIn("pat@example.com", page)
+        self.assertIn("<strong>pat</strong>", page)
 
     def test_new_listing_with_clean_text_is_auto_approved_and_visible_in_marketplace(self):
         user = User.objects.create_user("newposter", password="testpass123")
@@ -184,15 +204,6 @@ class CommunityTests(TestCase):
         listing = Listing.all_objects.get(title="Drug sale")
         self.assertEqual(listing.moderation_status, "pending")
         self.assertContains(response, "sent to admin for review")
-
-    def test_registration_requires_privacy_disclaimer_consent(self):
-        response = self.client.post(reverse("register"), {
-            "username": "newuser2", "email": "new2@example.com", "phone": "555-555-0101",
-            "password1": "StrongPass123!", "password2": "StrongPass123!",
-        })
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "You must accept the privacy disclaimer before signing up.")
-        self.assertFalse(User.objects.filter(username="newuser2").exists())
 
     def photo(self, name):
         # Valid transparent 1x1 GIF used to exercise Django's image validation.

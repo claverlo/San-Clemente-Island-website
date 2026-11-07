@@ -7,7 +7,7 @@ import uuid
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    phone = models.CharField(max_length=30)
+    phone = models.CharField(max_length=30, blank=True)
     department = models.CharField(max_length=100, blank=True)
     bio = models.TextField(blank=True)
     email_verified = models.BooleanField(default=False)
@@ -73,7 +73,7 @@ class Listing(models.Model):
     condition = models.CharField(max_length=20, choices=CONDITIONS)
     location = models.CharField(max_length=120, default="San Clemente Island")
     contact_email = models.EmailField()
-    contact_phone = models.CharField(max_length=30)
+    contact_phone = models.CharField(max_length=30, blank=True)
     image = models.ImageField(upload_to="listings/", blank=True)
     is_sold = models.BooleanField(default=False)
     moderation_status = models.CharField(max_length=20, choices=MODERATION_STATUS_CHOICES, default="pending")

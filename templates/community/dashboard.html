@@ -1,6 +1,6 @@
-{% extends 'base.html' %}
+{% extends 'base.html' %}{% load community_extras %}
 {% block content %}
-<div class="page-head compact"><div class="container d-flex justify-content-between align-items-end"><div><p class="eyebrow">WELCOME BACK</p><h1>{{ user.first_name|default:user.username }}'s Dashboard</h1></div><a class="btn btn-gold" href="{% url 'listing_create' %}"><i class="bi bi-plus-lg"></i> New listing</a></div></div>
+<div class="page-head compact"><div class="container d-flex justify-content-between align-items-end"><div><p class="eyebrow">WELCOME BACK</p><h1>{{ user|display_name }}'s Dashboard</h1></div><a class="btn btn-gold" href="{% url 'listing_create' %}"><i class="bi bi-plus-lg"></i> New listing</a></div></div>
 <div class="container section"><div class="row g-4">
 <aside class="col-lg-4"><form method="post" class="form-panel">{% csrf_token %}<h3>My profile</h3>
 {% if profile.email_verified %}<div class="verification-status verified"><i class="bi bi-envelope-check-fill"></i><div><small>EMAIL</small><strong>{{ user.email }}</strong><span>Verified</span></div></div>{% else %}<div class="verification-status unverified"><i class="bi bi-envelope-exclamation-fill"></i><div><small>EMAIL</small><strong>{{ user.email }}</strong><span>Not verified yet. Open the link we emailed you to start posting.</span></div></div>{% endif %}

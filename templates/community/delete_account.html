@@ -1,9 +1,9 @@
-{% extends 'base.html' %}{% block content %}
+{% extends 'base.html' %}{% load community_extras %}{% block content %}
 <div class="auth-wrap"><div class="auth-panel">
 	<div class="brand-mark large">SCI</div>
 	<p class="eyebrow dark">ACCOUNT</p>
 	<h1>Delete your account?</h1>
-	<p class="small text-muted mb-3">This permanently deletes <strong>{{ user.username }}</strong> along with your listings, Lost &amp; Found reports, chat messages and photos. It can't be undone.</p>
+	<p class="small text-muted mb-3">This permanently deletes the account for <strong>{{ user.email|default:user.username }}</strong> along with your listings, Lost &amp; Found reports, chat messages and photos. It can't be undone.</p>
 	<form method="post">{% csrf_token %}
 		{{ form.as_p }}
 		<button class="btn btn-danger w-100">Yes, delete my account</button>
