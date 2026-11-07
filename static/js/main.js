@@ -414,7 +414,7 @@ const appGuideSteps = () => {
     }
     if (safariVersion >= 26) {
       return { demo: 'ios26', arrow: 'bottom-right', steps: [
-        `Tap the ${dots} button at the bottom right of the screen.`,
+        `Tap the ${dots} or <i class="bi bi-list"></i> button at the bottom of the screen (whichever you see). If you see the <strong>Share</strong> button ${share} there instead, tap it and skip to step 3.`,
         `Tap <strong>Share</strong> ${share}.`,
         `Scroll down and tap <strong>Add to Home Screen</strong> ${plus}.`,
         'Tap <strong>Add</strong>.',
@@ -475,6 +475,7 @@ const openAppGuide = () => {
   const { demo, arrow, steps } = appGuideSteps();
   const stepsList = appGuide.querySelector('[data-app-guide-steps]');
   stepsList.innerHTML = steps.map((step) => `<li>${step}</li>`).join('');
+  appGuide.querySelector('[data-app-guide-help]').hidden = !demo.startsWith('ios');
   appGuide.dataset.arrow = arrow;
   appGuide.hidden = false;
   document.body.classList.add('disclaimer-lock');
