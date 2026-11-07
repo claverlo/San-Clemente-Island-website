@@ -39,38 +39,43 @@ class BootstrapMixin:
             else:
                 field.widget.attrs["class"] = "form-control"
 class StyledAuthenticationForm(BootstrapMixin, AuthenticationForm):
-    def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
+    error_messages = {**AuthenticationForm.error_messages, "invalid_login": "That email and password don't match. Check them and try again."}
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.apply_styles()
+        self.fields["username"].label = "Email"
+        self.fields["username"].widget.attrs.update({"autocomplete": "email", "inputmode": "email", "placeholder": "name@example.com"})
 class StyledPasswordResetForm(BootstrapMixin, PasswordResetForm):
     def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
 class StyledSetPasswordForm(BootstrapMixin, SetPasswordForm):
     def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
 class RegistrationForm(BootstrapMixin, UserCreationForm):
     email = forms.EmailField(required=True)
-    phone = forms.CharField(max_length=30, required=False, label="Phone number (required to post)")
-    consent_privacy = forms.BooleanField(
-        required=True,
-        label=(
-            "I understand that text/email messages may be sent for account and listing activity, "
-            "and my phone number will not be sold or shared with third-party marketing services."
-        ),
-        error_messages={"required": "You must accept the privacy disclaimer before signing up."},
-    )
-    class Meta: model = User; fields = ["username", "first_name", "last_name", "email", "phone", "password1", "password2"]
+    class Meta: model = User; fields = ["email", "first_name", "last_name", "password1", "password2"]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_styles()
-        self.fields["phone"].widget.attrs.update({"inputmode": "tel", "autocomplete": "tel", "data-phone-input": ""})
-        self.fields["phone"].help_text = "Optional for signup. Required before posting listings."
+        self.fields["email"].help_text = "You'll use this to log in. Other members won't see it."
+        self.fields["email"].widget.attrs.update({"autocomplete": "email", "inputmode": "email", "placeholder": "name@example.com"})
+        self.fields["first_name"].required = True
+        self.fields["first_name"].help_text = "Shown to other members instead of your email."
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
-        if User.objects.filter(email__iexact=email).exists():
-            raise forms.ValidationError("An account already uses this email address.")
+        if len(email) > 150:
+            raise forms.ValidationError("That email is too long. Please use a shorter one.")
+        if User.objects.filter(email__iexact=email).exists() or User.objects.filter(username__iexact=email).exists():
+            raise forms.ValidationError("An account already uses this email address. Try logging in or resetting your password.")
         return email
-    def clean_phone(self):
-        value = (self.cleaned_data.get("phone") or "").strip()
-        if not value:
-            return ""
-        return normalize_phone(value)
+    def _post_clean(self):
+        # The email doubles as the login name, so password checks compare against it too.
+        self.instance.username = self.cleaned_data.get("email", "")
+        super()._post_clean()
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.username = user.email = self.cleaned_data["email"]
+        if commit:
+            user.save()
+        return user
 class ListingForm(BootstrapMixin, forms.ModelForm):
     photos = MultipleImageField(
         required=False,
@@ -87,7 +92,7 @@ class ListingForm(BootstrapMixin, forms.ModelForm):
         }
         help_texts = {
             "contact_email": "Buyers will see this email on the listing.",
-            "contact_phone": "Buyers will see this phone number on the listing.",
+            "contact_phone": "Optional. Buyers will see this phone number on the listing.",
         }
         widgets = {"description": forms.Textarea(attrs={"rows": 5})}
 
@@ -123,7 +128,7 @@ class ListingForm(BootstrapMixin, forms.ModelForm):
         return photos
     def clean_contact_phone(self):
         value = (self.cleaned_data.get("contact_phone") or "").strip()
-        return normalize_phone(value)
+        return normalize_phone(value) if value else ""
 
     def clean(self):
         cleaned_data = super().clean()
@@ -221,7 +226,8 @@ class ProfileForm(BootstrapMixin, forms.ModelForm):
             except forms.ValidationError:
                 pass
     def clean_phone(self):
-        return normalize_phone(self.cleaned_data["phone"])
+        value = (self.cleaned_data.get("phone") or "").strip()
+        return normalize_phone(value) if value else ""
     def save(self, commit=True):
         previous_phone = ""
         if self.instance.pk:

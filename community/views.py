@@ -439,7 +439,7 @@ def register(request):
     form = RegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         user = form.save()
-        profile = Profile.objects.create(user=user, phone=form.cleaned_data["phone"])
+        profile = Profile.objects.create(user=user)
         login(request, user)
         try:
             send_verification_email(request, profile)
