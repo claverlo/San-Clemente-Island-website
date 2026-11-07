@@ -21,25 +21,64 @@
     if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
     return data;
   };
-  const friendly = (error) => (error && error.name === 'NotAllowedError'
-    ? 'Cancelled. Tap the button to try again.'
-    : (error && error.name === 'InvalidStateError' ? 'This device is already set up.' : (error && error.message) || 'Something went wrong.'));
-  const show = (box, text, ok) => { if (box) { box.textContent = text; box.hidden = false; box.className = `passkey-status small mt-2 ${ok ? 'text-success' : 'text-danger'}`; } };
+
+  // What to check when the device's Face ID / fingerprint window doesn't finish.
+  const agent = navigator.userAgent;
+  const deviceTip = /iPhone|iPad/.test(agent)
+    ? 'On iPhone: make sure Face ID or Touch ID is on (Settings → Face ID & Passcode) and Passwords & Keychain is on (Settings → your name → iCloud). Then try again and tap Continue.'
+    : /Android/.test(agent)
+      ? 'On Android: make sure a screen lock (fingerprint, face or PIN) is set up and you are signed in to Google on this phone. Then try again.'
+      : /Windows/.test(agent)
+        ? 'On Windows: set up Windows Hello first (Start → Settings → Accounts → Sign-in options → PIN, Face or Fingerprint). Then try again and confirm in the Windows Security window.'
+        : /Macintosh/.test(agent)
+          ? 'On a Mac: make sure Touch ID or your login password is set up and iCloud Keychain is on. Then try again.'
+          : 'Make sure this device has a screen lock (face, fingerprint or PIN) set up. Then try again.';
+  const friendly = (error) => {
+    if (error && error.name === 'NotAllowedError') return `It didn't finish. The window was closed, timed out, or Face ID / fingerprint isn't set up on this device. ${deviceTip}`;
+    if (error && error.name === 'InvalidStateError') return 'This device is already set up. You can sign in with Face ID / fingerprint.';
+    if (error && error.name === 'SecurityError') return 'Open this page at https://www.sciconnect.net and try again.';
+    return (error && error.message) || 'Something went wrong. Please try again.';
+  };
+  const show = (box, text, ok) => {
+    if (!box) return;
+    box.textContent = text;
+    box.hidden = false;
+    box.className = `passkey-status small mt-2 ${ok ? 'text-success' : 'text-danger'}`;
+  };
 
   // Show the passkey buttons only on devices that can use them.
   document.querySelectorAll('[data-passkey-only]').forEach((el) => { el.hidden = false; });
 
-  // Turn on (dashboard).
+  // Fetch the options as soon as the page loads, so tapping the button opens Face ID right away
+  // (Safari only allows it straight after a tap, with no waiting in between).
+  // Only one set of options is in play at a time: the server keeps just the newest challenge.
+  const load = (button, decode) => {
+    const pending = post(button.dataset.optionsUrl).then(decode);
+    pending.catch(() => {});
+    return pending;
+  };
+  const settle = (promise) => {
+    let value = null;
+    promise.then((v) => { value = v; }, () => {});
+    return () => value;
+  };
+
   document.querySelectorAll('[data-passkey-add]').forEach((button) => {
     const status = button.parentElement.querySelector('[data-passkey-status]');
+    const decode = (options) => {
+      options.challenge = fromB64(options.challenge);
+      options.user.id = fromB64(options.user.id);
+      (options.excludeCredentials || []).forEach((c) => { c.id = fromB64(c.id); });
+      return options;
+    };
+    let current = load(button, decode);
+    let now = settle(current);
     button.addEventListener('click', async () => {
       button.disabled = true;
+      status.hidden = true;
       try {
-        const options = await post(button.dataset.optionsUrl);
-        options.challenge = fromB64(options.challenge);
-        options.user.id = fromB64(options.user.id);
-        (options.excludeCredentials || []).forEach((c) => { c.id = fromB64(c.id); });
-        const credential = await navigator.credentials.create({ publicKey: options });
+        const publicKey = now() || await current;
+        const credential = await navigator.credentials.create({ publicKey });
         const result = await post(button.dataset.verifyUrl, {
           id: credential.id, rawId: toB64(credential.rawId), type: credential.type,
           response: {
@@ -52,21 +91,28 @@
         window.location.href = result.redirect;
       } catch (error) {
         show(status, friendly(error), false);
+        current = load(button, decode);
+        now = settle(current);
         button.disabled = false;
       }
     });
   });
 
-  // Sign in (login page).
   document.querySelectorAll('[data-passkey-login]').forEach((button) => {
     const status = button.parentElement.querySelector('[data-passkey-status]');
+    const decode = (options) => {
+      options.challenge = fromB64(options.challenge);
+      (options.allowCredentials || []).forEach((c) => { c.id = fromB64(c.id); });
+      return options;
+    };
+    let current = load(button, decode);
+    let now = settle(current);
     button.addEventListener('click', async () => {
       button.disabled = true;
+      status.hidden = true;
       try {
-        const options = await post(button.dataset.optionsUrl);
-        options.challenge = fromB64(options.challenge);
-        (options.allowCredentials || []).forEach((c) => { c.id = fromB64(c.id); });
-        const credential = await navigator.credentials.get({ publicKey: options });
+        const publicKey = now() || await current;
+        const credential = await navigator.credentials.get({ publicKey });
         const result = await post(button.dataset.verifyUrl, {
           id: credential.id, rawId: toB64(credential.rawId), type: credential.type,
           response: {
@@ -81,6 +127,8 @@
         window.location.href = result.redirect;
       } catch (error) {
         show(status, friendly(error), false);
+        current = load(button, decode);
+        now = settle(current);
         button.disabled = false;
       }
     });

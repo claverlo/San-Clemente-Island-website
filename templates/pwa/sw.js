@@ -1,8 +1,8 @@
 {% load static %}// SCI Connect app worker. Pages always come from the network so website changes show up in the app right away;
 // the offline page is only used when the phone has no signal.
-const CACHE = 'sci-connect-v1';
+const CACHE = 'sci-connect-v3';
 const OFFLINE_URL = '{% url "offline" %}';
-const OFFLINE_ASSETS = [OFFLINE_URL, '{% static "icons/icon-192.png" %}'];
+const OFFLINE_ASSETS = [OFFLINE_URL, '{% static "icons/icon-192.png" %}?v=3'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(OFFLINE_ASSETS)).then(() => self.skipWaiting()));

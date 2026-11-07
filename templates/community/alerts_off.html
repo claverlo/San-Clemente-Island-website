@@ -1,6 +1,6 @@
-{% extends 'base.html' %}{% block content %}
+{% extends 'base.html' %}{% load static %}{% block content %}
 <div class="auth-wrap"><div class="auth-panel">
-	<div class="brand-mark large">SCI</div>
+	<img class="auth-logo" src="{% static 'img/sci-logo.png' %}?v=2" alt="San Clemente Island" width="480" height="461">
 	<p class="eyebrow dark">EMAIL ALERTS</p>
 	<h1>Turn off all alerts?</h1>
 	<p class="small text-muted mb-3">{{ profile.user.email }} will stop getting emails about new posts. You can turn them back on any time from your dashboard.</p>
