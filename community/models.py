@@ -17,7 +17,12 @@ class Profile(models.Model):
     phone_verification_sent_at = models.DateTimeField(null=True, blank=True)
     phone_verification_expires_at = models.DateTimeField(null=True, blank=True)
     alert_categories = models.JSONField(default=list, blank=True)
+    alert_keywords = models.CharField(max_length=300, blank=True, help_text="Comma-separated words to watch for in any new post, like shoes, slippers.")
     alerts_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    @property
+    def alert_keyword_list(self):
+        return [word.strip() for word in (self.alert_keywords or "").split(",") if word.strip()]
 
     def __str__(self): return self.user.username
 

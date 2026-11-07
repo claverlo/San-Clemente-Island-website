@@ -1588,3 +1588,21 @@ svg {
     border-radius:10px;
     box-shadow:0 0 0 2px rgba(244,189,50,.6)
 }
+.alert-other-box {
+    display:grid;
+    gap:.25rem;
+    margin:-.1rem 0 .2rem 1.6rem
+}
+.dashboard-quick {
+    display:flex;
+    flex-wrap:wrap;
+    gap:.5rem 1.25rem;
+    padding-top:1rem
+}
+.dashboard-quick a {
+    font-weight:600;
+    text-decoration:none
+}
+.dashboard-quick a[href="#delete-account"] {
+    color:#b02a37
+}

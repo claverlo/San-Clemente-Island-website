@@ -534,6 +534,58 @@ class AccountFeatureTests(TestCase):
         self.post_listing("For Sale")
         self.assertEqual(mail.outbox, [])
 
+    def test_other_words_alert_matches_any_category_and_plurals(self):
+        self.fan_profile.alert_categories = []
+        self.fan_profile.alert_keywords = "slipper, socks"
+        self.fan_profile.save()
+        self.client.login(username="poster", password="testpass123")
+        self.client.post(reverse("listing_create"), {
+            "title": "Bedroom stuff", "category": "For Sale", "price": "5", "location": "Housing",
+            "description": "Two pairs of slippers, size 9.", "contact_email": "poster@example.com", "contact_phone": "",
+        })
+        self.assertEqual([m.to for m in mail.outbox], [["fan@example.com"]])
+        self.assertIn('mentions "slipper"', mail.outbox[0].subject)
+
+    def test_other_words_do_not_match_parts_of_words(self):
+        self.fan_profile.alert_categories = []
+        self.fan_profile.alert_keywords = "car"
+        self.fan_profile.save()
+        self.post_listing("For Sale")  # "Free couch ... Comfy couch" has no "car"; "care" etc. should not match either
+        self.client.post(reverse("listing_create"), {
+            "title": "Scarf", "category": "For Sale", "price": "5", "location": "Housing",
+            "description": "Handle with care.", "contact_email": "poster@example.com", "contact_phone": "",
+        })
+        self.assertEqual(mail.outbox, [])
+
+    def test_one_email_when_category_and_word_both_match(self):
+        self.fan_profile.alert_keywords = "couch"
+        self.fan_profile.save()
+        self.post_listing("Free")
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_dashboard_saves_other_words(self):
+        self.client.login(username="fan", password="testpass123")
+        self.client.post(reverse("dashboard"), {"form_type": "alerts", "alert_other": "on", "alert_keywords": " Shoes,slippers , shoes,, "})
+        self.fan_profile.refresh_from_db()
+        self.assertEqual(self.fan_profile.alert_keywords, "Shoes, slippers")
+        self.assertEqual(self.fan_profile.alert_categories, [])
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "e.g. shoes, slippers, socks")
+        self.assertContains(page, 'value="Shoes, slippers"')
+
+    def test_other_ticked_but_empty_shows_a_hint(self):
+        self.client.login(username="fan", password="testpass123")
+        response = self.client.post(reverse("dashboard"), {"form_type": "alerts", "alert_other": "on", "alert_keywords": ""})
+        self.assertContains(response, "Type what you want to hear about")
+
+    def test_unticking_other_clears_the_words(self):
+        self.fan_profile.alert_keywords = "shoes"
+        self.fan_profile.save()
+        self.client.login(username="fan", password="testpass123")
+        self.client.post(reverse("dashboard"), {"form_type": "alerts", "alert_keywords": "shoes"})
+        self.fan_profile.refresh_from_db()
+        self.assertEqual(self.fan_profile.alert_keywords, "")
+
     def test_lost_and_found_alert(self):
         self.client.login(username="poster", password="testpass123")
         self.client.post(reverse("lost_found"), {

@@ -119,7 +119,7 @@ def listing_create(request):
         for photo in form.cleaned_data["photos"]:
             ListingImage.objects.create(listing=listing, image=photo)
         if status == "approved":
-            notify_subscribers(request, listing.category, listing.title, listing.get_absolute_url(), request.user)
+            notify_subscribers(request, listing.category, listing.title, listing.get_absolute_url(), request.user, text=listing.description)
             messages.success(request, "Listing published successfully.")
         else:
             messages.success(request, "Listing submitted and sent to admin for review.")
@@ -202,7 +202,7 @@ def lost_found(request):
             item.moderation_notes = reason
             item.save()
             if status == "approved":
-                notify_subscribers(request, LOST_FOUND_ALERT, f"{item.kind}: {item.item}", reverse("lost_found"), request.user)
+                notify_subscribers(request, LOST_FOUND_ALERT, f"{item.kind}: {item.item}", reverse("lost_found"), request.user, text=item.description)
                 messages.success(request, "Post added.")
             else:
                 messages.success(request, "Post submitted and sent to admin for review.")
@@ -412,7 +412,8 @@ def alerts_off(request, token):
     profile = get_object_or_404(Profile, alerts_token=token)
     if request.method == "POST":
         profile.alert_categories = []
-        profile.save(update_fields=["alert_categories"])
+        profile.alert_keywords = ""
+        profile.save(update_fields=["alert_categories", "alert_keywords"])
         messages.success(request, "All email alerts are turned off. You can turn them back on from your dashboard.")
         return redirect("home")
     return render(request, "community/alerts_off.html", {"profile": profile})
@@ -473,11 +474,14 @@ def dashboard(request):
     can_post_listing = True
     alerts_post = request.method == "POST" and request.POST.get("form_type") == "alerts"
     form = ProfileForm(request.POST if request.method == "POST" and not alerts_post else None, instance=profile)
-    alerts_form = AlertSettingsForm(request.POST if alerts_post else None, initial={"alert_categories": profile.alert_categories})
+    alerts_form = AlertSettingsForm(request.POST if alerts_post else None, initial={
+        "alert_categories": profile.alert_categories, "alert_other": bool(profile.alert_keywords), "alert_keywords": profile.alert_keywords,
+    })
     if alerts_post and alerts_form.is_valid():
         profile.alert_categories = alerts_form.cleaned_data["alert_categories"]
-        profile.save(update_fields=["alert_categories"])
-        messages.success(request, "Email alerts saved." if profile.alert_categories else "Email alerts turned off.")
+        profile.alert_keywords = alerts_form.cleaned_data["alert_keywords"]
+        profile.save(update_fields=["alert_categories", "alert_keywords"])
+        messages.success(request, "Email alerts saved." if profile.alert_categories or profile.alert_keywords else "Email alerts turned off.")
         return redirect(reverse("dashboard") + "#email-alerts")
     if request.method == "POST" and not alerts_post and form.is_valid(): form.save(); messages.success(request, "Profile updated."); return redirect("dashboard")
     report_queryset = LostFound.objects.all() if (request.user.is_staff or request.user.is_superuser) else LostFound.objects.filter(user=request.user)
