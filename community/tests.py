@@ -1,3 +1,4 @@
+import re
 from django.core import mail
 import tempfile
 from datetime import timedelta
@@ -126,7 +127,7 @@ class CommunityTests(TestCase):
             "email": "New.Member@Example.com", "first_name": "Dana",
             "password1": "StrongPass123!", "password2": "StrongPass123!",
         })
-        self.assertRedirects(response, reverse("dashboard"))
+        self.assertRedirects(response, reverse("verify_code"))
         user = User.objects.get(email="new.member@example.com")
         self.assertEqual(user.username, "new.member@example.com")
         profile = Profile.objects.get(user=user)
@@ -134,6 +135,7 @@ class CommunityTests(TestCase):
         self.assertFalse(profile.email_verified)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(str(profile.verification_token), mail.outbox[0].body)
+        self.assertRegex(mail.outbox[0].subject, r"\d{6}")
 
         self.client.get(reverse("verify_email", args=[profile.verification_token]))
         response = self.client.post(reverse("listing_create"), {
@@ -505,7 +507,7 @@ class SessionAndChatNoticeTests(TestCase):
         self.assertEqual(int(cookie["max-age"]), 12 * 60 * 60)
 
     def test_chat_warns_against_sharing_sensitive_information(self):
-        self.assertContains(self.client.get(reverse("chat")), "Do not share sensitive information")
+        self.assertContains(self.client.get(reverse("chat")), "Please do not share any sensitive information.")
 
 
 
@@ -612,10 +614,10 @@ class AccountFeatureTests(TestCase):
         newbie = User.objects.create_user("newbie", email="newbie@example.com", password="testpass123")
         Profile.objects.create(user=newbie, phone="")
         self.client.login(username="newbie", password="testpass123")
-        self.assertRedirects(self.client.get(reverse("listing_create")), reverse("dashboard"))
+        self.assertRedirects(self.client.get(reverse("listing_create")), reverse("verify_code"))
         self.client.post(reverse("chat"), {"body": "hi"})
         self.assertFalse(ChatMessage.objects.exists())
-        self.assertContains(self.client.get(reverse("dashboard")), "Resend verification email")
+        self.assertContains(self.client.get(reverse("dashboard")), "Enter my code")
 
     def test_delete_account_needs_the_right_password(self):
         self.client.login(username="fan", password="testpass123")
@@ -637,3 +639,256 @@ class AccountFeatureTests(TestCase):
         self.client.login(username="boss", password="testpass123")
         self.client.post(reverse("delete_account"), {"password": "testpass123"})
         self.assertTrue(User.objects.filter(username="boss").exists())
+
+
+def code_from(message):
+    return re.search(r"\b(\d{6})\b", message.body).group(1)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class OneTimeCodeAndLoginSafetyTests(TestCase):
+    def sign_up(self):
+        self.client.post(reverse("register"), {
+            "email": "kai@example.com", "first_name": "Kai",
+            "password1": "StrongPass123!", "password2": "StrongPass123!",
+        })
+        return User.objects.get(email="kai@example.com")
+
+    def test_signup_code_verifies_the_email(self):
+        user = self.sign_up()
+        code = code_from(mail.outbox[0])
+        page = self.client.get(reverse("verify_code"))
+        self.assertContains(page, "kai@example.com")
+        response = self.client.post(reverse("verify_code"), {"code": code[:3] + " " + code[3:]})
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertTrue(Profile.objects.get(user=user).email_verified)
+
+    def test_wrong_code_does_not_verify_and_codes_work_once(self):
+        user = self.sign_up()
+        code = code_from(mail.outbox[0])
+        wrong = "000000" if code != "000000" else "111111"
+        self.assertContains(self.client.post(reverse("verify_code"), {"code": wrong}), "right or has expired")
+        self.assertFalse(Profile.objects.get(user=user).email_verified)
+
+    def test_code_stops_working_after_five_wrong_tries(self):
+        user = self.sign_up()
+        code = code_from(mail.outbox[0])
+        wrong = "000000" if code != "000000" else "111111"
+        for _ in range(5):
+            self.client.post(reverse("verify_code"), {"code": wrong})
+        self.client.post(reverse("verify_code"), {"code": code})
+        self.assertFalse(Profile.objects.get(user=user).email_verified)
+
+    def test_resend_waits_a_minute(self):
+        self.sign_up()
+        self.client.post(reverse("verify_code"), {"action": "resend"})
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_posting_before_verifying_goes_to_the_code_page(self):
+        self.sign_up()
+        self.assertRedirects(self.client.get(reverse("listing_create")), reverse("verify_code"))
+
+    def make_member(self):
+        user = User.objects.create_user("lee@example.com", email="lee@example.com", password="RightPass123!")
+        Profile.objects.create(user=user, email_verified=True)
+        return user
+
+    def test_trust_this_device_keeps_you_signed_in_30_days(self):
+        self.make_member()
+        self.client.post(reverse("login"), {"username": "lee@example.com", "password": "RightPass123!", "trust_device": "on"})
+        self.assertEqual(int(self.client.cookies["sessionid"]["max-age"]), 30 * 24 * 60 * 60)
+
+    def test_without_trust_it_is_12_hours(self):
+        self.make_member()
+        self.client.post(reverse("login"), {"username": "lee@example.com", "password": "RightPass123!"})
+        self.assertEqual(int(self.client.cookies["sessionid"]["max-age"]), 12 * 60 * 60)
+
+    def test_email_stays_filled_in_after_a_wrong_password(self):
+        self.make_member()
+        response = self.client.post(reverse("login"), {"username": "lee@example.com", "password": "nope"})
+        self.assertContains(response, 'value="lee@example.com"')
+        self.assertContains(response, "3 more tries before the account locks")
+        self.assertContains(response, "data-remember-email")
+
+    def test_four_wrong_passwords_lock_the_account(self):
+        self.make_member()
+        for _ in range(4):
+            response = self.client.post(reverse("login"), {"username": "lee@example.com", "password": "nope"})
+        self.assertContains(response, "account is locked")
+        response = self.client.post(reverse("login"), {"username": "lee@example.com", "password": "RightPass123!"})
+        self.assertContains(response, "account is locked")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_a_right_password_resets_the_count(self):
+        user = self.make_member()
+        for _ in range(3):
+            self.client.post(reverse("login"), {"username": "lee@example.com", "password": "nope"})
+        self.client.post(reverse("login"), {"username": "lee@example.com", "password": "RightPass123!"})
+        self.assertEqual(Profile.objects.get(user=user).failed_logins, 0)
+
+    def test_reset_by_code_unlocks_and_signs_in(self):
+        user = self.make_member()
+        for _ in range(4):
+            self.client.post(reverse("login"), {"username": "lee@example.com", "password": "nope"})
+        response = self.client.post(reverse("password_reset"), {"email": "LEE@example.com"})
+        self.assertRedirects(response, reverse("password_reset_code"))
+        code = code_from(mail.outbox[-1])
+        response = self.client.post(reverse("password_reset_code"), {"code": code, "new_password1": "BrandNew456!", "new_password2": "BrandNew456!"})
+        self.assertRedirects(response, reverse("dashboard"))
+        profile = Profile.objects.get(user=user)
+        self.assertFalse(profile.login_locked)
+        self.assertEqual(profile.failed_logins, 0)
+        self.client.logout()
+        self.client.post(reverse("login"), {"username": "lee@example.com", "password": "BrandNew456!"})
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_reset_with_wrong_code_changes_nothing(self):
+        user = self.make_member()
+        self.client.post(reverse("password_reset"), {"email": "lee@example.com"})
+        code = code_from(mail.outbox[-1])
+        wrong = "000000" if code != "000000" else "111111"
+        response = self.client.post(reverse("password_reset_code"), {"code": wrong, "new_password1": "BrandNew456!", "new_password2": "BrandNew456!"})
+        self.assertContains(response, "right or has expired")
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("RightPass123!"))
+
+    def test_reset_for_unknown_email_looks_the_same_and_sends_nothing(self):
+        response = self.client.post(reverse("password_reset"), {"email": "nobody@example.com"})
+        self.assertRedirects(response, reverse("password_reset_code"))
+        self.assertEqual(mail.outbox, [])
+
+    def test_admins_are_never_locked_out(self):
+        User.objects.create_superuser("boss2", email="boss2@example.com", password="RightPass123!")
+        for _ in range(5):
+            self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "nope"})
+        self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "RightPass123!"})
+        self.assertIn("_auth_user_id", self.client.session)
+
+
+class FakeFaceIdDevice:
+    """Acts like a phone's Face ID / fingerprint passkey so the full sign-in flow can be tested."""
+
+    def __init__(self, rp_id="testserver", origin="https://testserver"):
+        import os
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.rp_id, self.origin = rp_id, origin
+        self.key = ec.generate_private_key(ec.SECP256R1())
+        self.credential_id = os.urandom(32)
+        self.count = 0
+
+    @staticmethod
+    def b64(data):
+        import base64
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    def client_data(self, kind, challenge):
+        import json as _json
+        return _json.dumps({"type": kind, "challenge": challenge, "origin": self.origin}).encode()
+
+    def rp_hash(self):
+        import hashlib
+        return hashlib.sha256(self.rp_id.encode()).digest()
+
+    def create(self, options):
+        import cbor2
+        numbers = self.key.public_key().public_numbers()
+        cose = cbor2.dumps({1: 2, 3: -7, -1: 1, -2: numbers.x.to_bytes(32, "big"), -3: numbers.y.to_bytes(32, "big")})
+        auth_data = (self.rp_hash() + bytes([0x45]) + (0).to_bytes(4, "big") + bytes(16)
+                     + len(self.credential_id).to_bytes(2, "big") + self.credential_id + cose)
+        attestation = cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": auth_data})
+        cid = self.b64(self.credential_id)
+        return {"id": cid, "rawId": cid, "type": "public-key", "response": {
+            "clientDataJSON": self.b64(self.client_data("webauthn.create", options["challenge"])),
+            "attestationObject": self.b64(attestation), "transports": ["internal"]}, "clientExtensionResults": {}}
+
+    def sign_in(self, options):
+        import hashlib
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.count += 1
+        client_data = self.client_data("webauthn.get", options["challenge"])
+        auth_data = self.rp_hash() + bytes([0x05]) + self.count.to_bytes(4, "big")
+        signature = self.key.sign(auth_data + hashlib.sha256(client_data).digest(), ec.ECDSA(hashes.SHA256()))
+        cid = self.b64(self.credential_id)
+        return {"id": cid, "rawId": cid, "type": "public-key", "response": {
+            "clientDataJSON": self.b64(client_data), "authenticatorData": self.b64(auth_data),
+            "signature": self.b64(signature), "userHandle": None}, "clientExtensionResults": {}}
+
+
+class FaceIdSignInTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("ana@example.com", email="ana@example.com", password="RightPass123!")
+        Profile.objects.create(user=self.user, email_verified=True)
+        self.device = FakeFaceIdDevice()
+
+    def post_json(self, name, data=None):
+        import json as _json
+        return self.client.post(reverse(name), _json.dumps(data or {}), content_type="application/json")
+
+    def turn_on(self):
+        self.client.force_login(self.user)
+        options = self.post_json("passkey_register_options").json()
+        self.assertEqual(options["authenticatorSelection"]["userVerification"], "required")
+        return self.post_json("passkey_register_verify", self.device.create(options))
+
+    def test_turn_on_then_sign_in_with_face_id(self):
+        self.assertTrue(self.turn_on().json()["ok"])
+        from community.models import Passkey
+        self.assertEqual(Passkey.objects.filter(user=self.user).count(), 1)
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        response = self.post_json("passkey_login_verify", self.device.sign_in(options))
+        self.assertEqual(response.json()["redirect"], reverse("dashboard"))
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
+        self.assertEqual(int(self.client.cookies["sessionid"]["max-age"]), 30 * 24 * 60 * 60)
+
+    def test_a_device_that_was_never_set_up_is_refused(self):
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        response = self.post_json("passkey_login_verify", FakeFaceIdDevice().sign_in(options))
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_a_faked_signature_is_refused(self):
+        self.turn_on()
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        attempt = self.device.sign_in(options)
+        attempt["response"]["signature"] = FakeFaceIdDevice().sign_in(options)["response"]["signature"]
+        self.assertEqual(self.post_json("passkey_login_verify", attempt).status_code, 400)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_reusing_an_old_challenge_is_refused(self):
+        self.turn_on()
+        self.client.logout()
+        options = self.post_json("passkey_login_options").json()
+        attempt = self.device.sign_in(options)
+        self.post_json("passkey_login_verify", attempt)
+        self.client.logout()
+        self.assertEqual(self.post_json("passkey_login_verify", attempt).status_code, 400)
+
+    def test_face_id_unlocks_an_account_locked_by_wrong_passwords(self):
+        self.turn_on()
+        self.client.logout()
+        for _ in range(4):
+            self.client.post(reverse("login"), {"username": "ana@example.com", "password": "nope"})
+        self.assertTrue(Profile.objects.get(user=self.user).login_locked)
+        options = self.post_json("passkey_login_options").json()
+        self.post_json("passkey_login_verify", self.device.sign_in(options))
+        self.assertFalse(Profile.objects.get(user=self.user).login_locked)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_must_be_signed_in_to_turn_on(self):
+        self.assertEqual(self.post_json("passkey_register_options").status_code, 302)
+
+    def test_remove_a_device(self):
+        self.turn_on()
+        key = self.user.passkeys.get()
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "Turn on for this device")
+        self.assertContains(page, key.name)
+        self.client.post(reverse("passkey_delete", args=[key.pk]))
+        self.assertFalse(self.user.passkeys.exists())
+
+    def test_login_page_offers_face_id(self):
+        self.assertContains(self.client.get(reverse("login")), "Sign in with Face ID / fingerprint")

@@ -5,6 +5,47 @@ from django.utils import timezone
 from datetime import timedelta
 import uuid
 
+class EmailCode(models.Model):
+    """A short one-time code emailed to a member, used to verify their email or reset their password."""
+    VERIFY = "verify"
+    RESET = "reset"
+    PURPOSES = [(VERIFY, "Verify email"), (RESET, "Reset password")]
+    LIFETIME = timedelta(minutes=15)
+    MAX_TRIES = 5
+    RESEND_WAIT = timedelta(seconds=60)
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="email_codes")
+    purpose = models.CharField(max_length=10, choices=PURPOSES)
+    code_hash = models.CharField(max_length=128)
+    tries = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.get_purpose_display()} code for {self.user}"
+
+
+class Passkey(models.Model):
+    """A Face ID / fingerprint / Windows Hello sign-in set up on one of the member's devices."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passkeys")
+    credential_id = models.CharField(max_length=512, unique=True)
+    public_key = models.TextField()
+    sign_count = models.PositiveBigIntegerField(default=0)
+    name = models.CharField(max_length=60, default="This device")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.name} for {self.user}"
+
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     phone = models.CharField(max_length=30, blank=True)
@@ -19,6 +60,8 @@ class Profile(models.Model):
     alert_categories = models.JSONField(default=list, blank=True)
     alert_keywords = models.CharField(max_length=300, blank=True, help_text="Comma-separated words to watch for in any new post, like shoes, slippers.")
     alerts_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    failed_logins = models.PositiveSmallIntegerField(default=0)
+    login_locked = models.BooleanField(default=False, help_text="Locked after too many wrong passwords. Resetting the password unlocks it.")
 
     @property
     def alert_keyword_list(self):

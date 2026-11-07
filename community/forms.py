@@ -3,6 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from .backends import find_accounts, is_locked
 from .models import ChatMessage, ContactMessage, Listing, LostFound, Profile, alert_choices
 
 def normalize_phone(value):
@@ -38,13 +40,100 @@ class BootstrapMixin:
                 field.widget.attrs["class"] = "form-check-input"
             else:
                 field.widget.attrs["class"] = "form-control"
+MAX_WRONG_PASSWORDS = 4
+LOCKED_MESSAGE = ("Too many wrong passwords, so this account is locked to keep it safe. "
+                  "Tap \u201cForgot password?\u201d below to get a code and set a new password.")
+
+
 class StyledAuthenticationForm(BootstrapMixin, AuthenticationForm):
     error_messages = {**AuthenticationForm.error_messages, "invalid_login": "That email and password don't match. Check them and try again."}
+    trust_device = forms.BooleanField(required=False, label="Trust this device (stay signed in for 30 days)")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_styles()
         self.fields["username"].label = "Email"
-        self.fields["username"].widget.attrs.update({"autocomplete": "email", "inputmode": "email", "placeholder": "name@example.com"})
+        self.fields["username"].widget.attrs.update({"autocomplete": "email", "inputmode": "email", "placeholder": "name@example.com", "data-remember-email": ""})
+        self.fields["trust_device"].help_text = "Don't check this on a shared or public computer."
+
+    def clean(self):
+        typed = self.cleaned_data.get("username")
+        lockable = [user for user in find_accounts(typed) if not user.is_superuser]
+        if any(is_locked(user) for user in lockable):
+            raise forms.ValidationError(LOCKED_MESSAGE, code="locked")
+        try:
+            cleaned = super().clean()
+        except forms.ValidationError:
+            if lockable and self.cleaned_data.get("password"):
+                profile, _ = Profile.objects.get_or_create(user=lockable[0])
+                profile.failed_logins += 1
+                profile.login_locked = profile.failed_logins >= MAX_WRONG_PASSWORDS
+                profile.save(update_fields=["failed_logins", "login_locked"])
+                if profile.login_locked:
+                    raise forms.ValidationError(LOCKED_MESSAGE, code="locked")
+                left = MAX_WRONG_PASSWORDS - profile.failed_logins
+                raise forms.ValidationError(
+                    f"That email and password don't match. {left} more {'try' if left == 1 else 'tries'} before the account locks.",
+                    code="invalid_login",
+                )
+            raise
+        profile = getattr(self.get_user(), "profile", None)
+        if profile and profile.failed_logins:
+            profile.failed_logins = 0
+            profile.save(update_fields=["failed_logins"])
+        return cleaned
+
+
+class CodeField(forms.CharField):
+    def __init__(self, **kwargs):
+        super().__init__(max_length=12, label="6-digit code", **kwargs)
+        self.widget.attrs.update({
+            "class": "form-control code-input", "inputmode": "numeric", "autocomplete": "one-time-code",
+            "pattern": "[0-9 ]*", "placeholder": "123456", "autofocus": True,
+        })
+
+    def clean(self, value):
+        digits = "".join(ch for ch in super().clean(value) if ch.isdigit())
+        if len(digits) != 6:
+            raise forms.ValidationError("Enter the 6 numbers from the email.")
+        return digits
+
+
+class VerifyCodeForm(forms.Form):
+    code = CodeField()
+
+
+class ResetRequestForm(BootstrapMixin, forms.Form):
+    email = forms.EmailField(label="Email")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.apply_styles()
+        self.fields["email"].widget.attrs.update({"autocomplete": "email", "inputmode": "email", "placeholder": "name@example.com", "data-remember-email": ""})
+
+
+class ResetCodeForm(BootstrapMixin, forms.Form):
+    code = CodeField()
+    new_password1 = forms.CharField(label="New password", widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
+    new_password2 = forms.CharField(label="New password again", widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        self.apply_styles()
+        self.fields["code"].widget.attrs["class"] = "form-control code-input"
+
+    def clean(self):
+        cleaned = super().clean()
+        first, second = cleaned.get("new_password1"), cleaned.get("new_password2")
+        if first and second and first != second:
+            self.add_error("new_password2", "The two passwords don't match.")
+        elif first:
+            try:
+                validate_password(first, self.user)
+            except forms.ValidationError as error:
+                self.add_error("new_password1", error)
+        return cleaned
 class StyledPasswordResetForm(BootstrapMixin, PasswordResetForm):
     def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs); self.apply_styles()
 class StyledSetPasswordForm(BootstrapMixin, SetPasswordForm):

@@ -4,7 +4,8 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from django.views.static import serve
-from community.forms import StyledAuthenticationForm, StyledPasswordResetForm, StyledSetPasswordForm
+from community.forms import StyledSetPasswordForm
+from community import views as community_views
 from mapapi.frontend import serve_map_frontend
 
 urlpatterns = [
@@ -14,14 +15,10 @@ urlpatterns = [
     path("map/icons.svg", serve, {"document_root": settings.MAP_FRONTEND_DIST_DIR, "path": "icons.svg"}),
     re_path(r"^map/assets/(?P<path>.*)$", serve, {"document_root": settings.MAP_FRONTEND_DIST_DIR / "assets"}),
     re_path(r"^map/(?!api/|assets/|favicon\.svg|icons\.svg).*$", serve_map_frontend),
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html", authentication_form=StyledAuthenticationForm), name="login"),
+    path("login/", community_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
-    path("password-reset/", auth_views.PasswordResetView.as_view(
-        template_name="registration/password_reset_form.html",
-        email_template_name="registration/password_reset_email.html",
-        subject_template_name="registration/password_reset_subject.txt",
-        form_class=StyledPasswordResetForm,
-    ), name="password_reset"),
+    path("password-reset/", community_views.password_reset_request, name="password_reset"),
+    path("password-reset/code/", community_views.password_reset_code, name="password_reset_code"),
     path("password-reset/done/", auth_views.PasswordResetDoneView.as_view(
         template_name="registration/password_reset_done.html",
     ), name="password_reset_done"),

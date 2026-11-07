@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import passkeys, views
 
 urlpatterns = [
     path("", views.home, name="home"), path("marketplace/", views.marketplace, name="marketplace"),
@@ -14,6 +14,12 @@ urlpatterns = [
     path("register/", views.register, name="register"), path("dashboard/", views.dashboard, name="dashboard"),
     path("verify-email/<uuid:token>/", views.verify_email, name="verify_email"),
     path("resend-verification/", views.resend_verification, name="resend_verification"),
+    path("verify/", views.verify_code, name="verify_code"),
+    path("passkeys/register/options/", passkeys.register_options, name="passkey_register_options"),
+    path("passkeys/register/verify/", passkeys.register_verify, name="passkey_register_verify"),
+    path("passkeys/login/options/", passkeys.login_options, name="passkey_login_options"),
+    path("passkeys/login/verify/", passkeys.login_verify, name="passkey_login_verify"),
+    path("passkeys/<int:pk>/delete/", passkeys.delete, name="passkey_delete"),
     path("phone/send-code/", views.send_phone_verification, name="send_phone_verification"),
     path("phone/verify/", views.verify_phone, name="verify_phone"),
     path("contact/", views.contact_admin, name="contact_admin"),

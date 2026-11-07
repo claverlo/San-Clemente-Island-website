@@ -1606,3 +1606,97 @@ svg {
 .dashboard-quick a[href="#delete-account"] {
     color:#b02a37
 }
+/* Top menu: one tidy row when everything fits, otherwise the menu button (main.js decides by measuring) */
+.navbar .nav-link,
+.navbar .btn {
+    white-space:nowrap
+}
+.navbar.navbar-expand-xl .nav-link {
+    margin:0;
+    padding-left:.5rem;
+    padding-right:.5rem
+}
+.navbar.nav-collapsed .navbar-collapse {
+    max-height:calc(100vh - 90px);
+    overflow-y:auto
+}
+.navbar.nav-collapsed .navbar-nav {
+    align-items:stretch!important;
+    padding:.5rem 0
+}
+.navbar.nav-collapsed .nav-link {
+    padding:.65rem 0;
+    font-size:1rem;
+    border-bottom:1px solid rgba(255,255,255,.08)
+}
+.navbar.nav-collapsed .navbar-nav form .btn,
+.navbar.nav-collapsed .navbar-nav > .nav-item > .btn {
+    margin:.75rem 0 0!important;
+    width:100%;
+    padding:.55rem
+}
+.code-input {
+    font-size:1.6rem;
+    letter-spacing:.4em;
+    text-align:center;
+    font-variant-numeric:tabular-nums
+}
+.trust-device {
+    display:grid;
+    gap:.15rem;
+    padding-left:0;
+    margin:0 0 .75rem
+}
+.trust-device-row {
+    display:flex;
+    align-items:center;
+    gap:.5rem;
+    font-weight:600
+}
+.trust-device-row input {
+    margin:0;
+    width:1.1rem;
+    height:1.1rem;
+    flex:none
+}
+.passkey-list {
+    list-style:none;
+    padding:0;
+    margin:0 0 .75rem;
+    display:grid;
+    gap:.5rem
+}
+.passkey-list li {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:.75rem;
+    padding:.5rem .65rem;
+    border:1px solid #dbe3ea;
+    border-radius:6px
+}
+.passkey-list small {
+    display:block;
+    color:#6c7a89
+}
+.passkey-login {
+    margin:.75rem 0 1rem
+}
+.passkey-or {
+    display:flex;
+    align-items:center;
+    gap:.75rem;
+    margin-top:1rem;
+    color:#6c7a89;
+    font-size:.85rem
+}
+.passkey-or::before,
+.passkey-or::after {
+    content:"";
+    flex:1;
+    border-top:1px solid #dbe3ea
+}
+.trust-device .form-check-input {
+    float:none;
+    margin-left:0
+}
