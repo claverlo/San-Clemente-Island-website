@@ -166,8 +166,12 @@ def notify_admin_of_report(request, item_label, reporter, reason):
 def home(request):
     Event.purge_expired()
     today = timezone.localdate()
+    month = today.month
+    # Local preview only: /?month=7 shows July's holiday slides. Ignored on the live site.
+    if settings.DEBUG and request.GET.get("month", "").isdigit() and 1 <= int(request.GET["month"]) <= 12:
+        month = int(request.GET["month"])
     return render(request, "community/home.html", {
-        "month_holidays": month_highlights(today.year, today.month),
+        "month_holidays": month_highlights(today.year, month),
         "listings": Listing.objects.filter(is_sold=False, moderation_status="approved")[:4],
         "events": Event.objects.upcoming()[:3],
         "contacts": CONTACTS[:3],

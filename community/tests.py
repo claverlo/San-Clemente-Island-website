@@ -962,7 +962,7 @@ class FederalHolidayTests(TestCase):
         from unittest import mock
         with mock.patch("community.views.timezone.localdate", return_value=date(2026, 11, 7)):
             page = self.client.get(reverse("home")).content.decode()
-        self.assertIn('holiday-slide active"><img src="/static/images/holidays/veterans-day.jpg', page)
+        self.assertIn('holiday-slide active" data-holiday="veterans-day"><img src="/static/images/holidays/veterans-day.jpg', page)
         self.assertIn("thanksgiving-day.jpg", page)
         self.assertNotIn("columbus-day.jpg", page)
         self.assertLess(page.index("thanksgiving-day.jpg"), page.index("homepage-diver.jpg"))

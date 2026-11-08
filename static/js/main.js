@@ -181,13 +181,18 @@ document.querySelectorAll('[data-hero-slideshow]').forEach((slideshow) => {
     current = (index + slides.length) % slides.length;
     slides[current].classList.add('active');
     dots[current]?.classList.add('active');
+    slideshow.dispatchEvent(new CustomEvent('slidechange', { detail: slides[current] }));
   };
 
   let timer;
   const startTimer = () => {
-    window.clearInterval(timer);
+    window.clearTimeout(timer);
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      timer = window.setInterval(() => showSlide(current + 1), 4000);
+      const holidayShowing = slides[current].classList.contains('holiday-slide');
+      timer = window.setTimeout(() => {
+        showSlide(current + 1);
+        startTimer();
+      }, holidayShowing ? 7000 : 4000);
     }
   };
 
@@ -200,7 +205,260 @@ document.querySelectorAll('[data-hero-slideshow]').forEach((slideshow) => {
     startTimer();
   });
   startTimer();
+  holidayEffects(slideshow, slides[current]);
 });
+
+/* Animated effects drawn over the holiday slides (fireworks, hearts, leaves, snow, ...). */
+function holidayEffects(slideshow, firstSlide) {
+  const canvas = slideshow.querySelector('[data-holiday-effects]');
+  if (!canvas || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const ctx = canvas.getContext('2d');
+  const RWB = ['#ffffff', '#e0162b', '#3c6eff'];
+  const THEMES = {
+    'new-years-day': { kind: 'fireworks', colors: ['#ffd23f', '#ff4fd8', '#4fc3ff', '#ff7a2f', '#ffffff'] },
+    'independence-day': { kind: 'fireworks', colors: RWB },
+    'inauguration-day': { kind: 'fireworks', colors: RWB },
+    'valentines-day': { kind: 'hearts', colors: ['#ff2d55', '#ff6b8b', '#d10f3f'] },
+    'mothers-day': { kind: 'petals', colors: ['#f7a8c8', '#e58ab8', '#fbd3e4', '#c98bd8'] },
+    'st-patricks-day': { kind: 'shamrocks', colors: ['#3fbf4f', '#7ed957', '#2e9b3e'] },
+    'easter': { kind: 'confetti', colors: ['#ff8fc7', '#8fd3ff', '#ffe066', '#b4f08c', '#c9a3ff'] },
+    'juneteenth': { kind: 'confetti', colors: ['#c8102e', '#111111', '#078930', '#fcd116'] },
+    'fathers-day': { kind: 'confetti', colors: ['#1f5fbf', '#ffffff', '#ff6b8b', '#6ec1ff'] },
+    'labor-day': { kind: 'confetti', colors: RWB },
+    'columbus-day': { kind: 'confetti', colors: ['#009246', '#ffffff', '#ce2b37'] },
+    'washingtons-birthday': { kind: 'stars', colors: RWB },
+    'memorial-day': { kind: 'stars', colors: ['#ffffff', '#dfe8ff'] },
+    'veterans-day': { kind: 'stars', colors: ['#e0162b', '#2a4fbf', '#d4a017'] },
+    'mlk-day': { kind: 'sparkles', colors: ['#ffe9a8', '#ffffff', '#ffd27a'] },
+    'halloween': { kind: 'bats', colors: ['#111111', '#2a1a0a'] },
+    'thanksgiving-day': { kind: 'leaves', colors: ['#d2691e', '#b5651d', '#e8a33d', '#a0522d', '#cc4b1f'] },
+    'christmas-day': { kind: 'snow', colors: ['#ffffff'] },
+  };
+  const COUNTS = { hearts: 16, bats: 7, snow: 70, sparkles: 26, stars: 22 };
+  const SWAY = { hearts: 1, snow: 1, petals: 1, leaves: 1 };
+  let theme = null;
+  let parts = [];
+  let frame = 0;
+  let running = false;
+  let width = 0;
+  let height = 0;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+  const scale = () => Math.max(width, 300) / 600;
+
+  const resize = () => {
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    width = canvas.clientWidth;
+    height = canvas.clientHeight;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  };
+
+  const spawn = (anywhere) => {
+    const kind = theme.kind;
+    const color = pick(theme.colors);
+    const s = scale();
+    if (kind === 'hearts') {
+      return { x: rand(0, width), y: anywhere ? rand(0, height) : height + 20, vx: 0, vy: -rand(0.5, 1.2), s: rand(8, 18) * s, a: rand(0, 6), color };
+    }
+    if (kind === 'bats') {
+      return { x: anywhere ? rand(0, width) : -30, y: rand(height * 0.05, height * 0.6), vx: rand(1, 2.2), vy: 0, s: rand(10, 20) * s, a: rand(0, 6), spin: 0, color };
+    }
+    if (kind === 'sparkles' || kind === 'stars') {
+      return { x: rand(0, width), y: anywhere ? rand(0, height) : -10, vx: 0, vy: kind === 'stars' ? rand(0.3, 0.8) : 0, s: rand(3, 8) * s, a: rand(0, 6), life: rand(80, 200), age: 0, color };
+    }
+    const snow = kind === 'snow';
+    return { x: rand(0, width), y: anywhere ? rand(0, height) : -20, vx: rand(-0.4, 0.4), vy: rand(0.6, 1.6) * (snow ? 0.7 : 1), s: rand(snow ? 2 : 5, snow ? 5 : 11) * s, a: rand(0, 6), spin: rand(-0.05, 0.05), color };
+  };
+
+  const burst = () => {
+    const x = rand(width * 0.15, width * 0.85);
+    const y = rand(height * 0.1, height * 0.45);
+    const color = pick(theme.colors);
+    const count = 46;
+    for (let i = 0; i < count; i += 1) {
+      const angle = (Math.PI * 2 * i) / count;
+      const speed = rand(1.5, 3.4) * scale();
+      parts.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: rand(50, 80), age: 0, color });
+    }
+  };
+
+  const heart = (p) => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(p.s / 16, p.s / 16);
+    ctx.beginPath();
+    ctx.moveTo(0, 5);
+    ctx.bezierCurveTo(-14, -6, -6, -16, 0, -8);
+    ctx.bezierCurveTo(6, -16, 14, -6, 0, 5);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.restore();
+  };
+
+  const shamrock = (p) => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.a);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.s * 0.08, 0, p.s * 0.16, p.s * 1.1);
+    for (let i = 0; i < 3; i += 1) {
+      ctx.rotate((Math.PI * 2) / 3);
+      ctx.beginPath();
+      ctx.arc(0, -p.s * 0.55, p.s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  const star = (p, alpha) => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.a);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const r = i % 2 ? p.s * 0.45 : p.s;
+      const t = (Math.PI * i) / 5 - Math.PI / 2;
+      ctx.lineTo(Math.cos(t) * r, Math.sin(t) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+
+  const bat = (p) => {
+    const flap = Math.sin(frame * 0.35 + p.a) * 0.6;
+    ctx.save();
+    ctx.translate(p.x, p.y + Math.sin(frame * 0.05 + p.a) * 6);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-p.s * 0.6, -p.s * (0.2 + flap), -p.s * 1.3, -p.s * flap);
+    ctx.quadraticCurveTo(-p.s * 0.7, p.s * 0.1, -p.s * 0.5, p.s * 0.25);
+    ctx.quadraticCurveTo(-p.s * 0.25, p.s * 0.1, 0, p.s * 0.3);
+    ctx.quadraticCurveTo(p.s * 0.25, p.s * 0.1, p.s * 0.5, p.s * 0.25);
+    ctx.quadraticCurveTo(p.s * 0.7, p.s * 0.1, p.s * 1.3, -p.s * flap);
+    ctx.quadraticCurveTo(p.s * 0.6, -p.s * (0.2 + flap), 0, 0);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  const leaf = (p) => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.a);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.s, p.s * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(80, 40, 10, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-p.s, 0);
+    ctx.lineTo(p.s * 1.2, 0);
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  const flake = (p) => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.a);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    if (theme.kind === 'snow') {
+      ctx.globalAlpha = 0.9;
+      ctx.arc(0, 0, p.s, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (theme.kind === 'petals') {
+      ctx.ellipse(0, 0, p.s * 0.9, p.s * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+    }
+    ctx.restore();
+  };
+
+  const fireworks = () => {
+    if (frame % 55 === 1) burst();
+    ctx.globalCompositeOperation = 'lighter';
+    parts = parts.filter((p) => {
+      p.age += 1;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.97;
+      p.vy = p.vy * 0.97 + 0.04;
+      ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      return p.age < p.life;
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  };
+
+  const falling = () => {
+    const kind = theme.kind;
+    const target = COUNTS[kind] || 34;
+    while (parts.length < target) parts.push(spawn(false));
+    parts = parts.filter((p) => {
+      p.a += p.spin === undefined ? 0.02 : p.spin;
+      p.x += p.vx + (SWAY[kind] ? Math.sin(frame * 0.02 + p.a) * 0.4 : 0);
+      p.y += p.vy;
+      if (kind === 'sparkles' || kind === 'stars') {
+        p.age += 1;
+        star(p, Math.sin(Math.PI * Math.min(1, p.age / p.life)) * 0.9);
+        return p.age < p.life && p.y < height + 20;
+      }
+      if (kind === 'hearts') heart(p);
+      else if (kind === 'shamrocks') shamrock(p);
+      else if (kind === 'bats') bat(p);
+      else if (kind === 'leaves') leaf(p);
+      else flake(p);
+      return p.y > -40 && p.y < height + 40 && p.x < width + 40;
+    });
+  };
+
+  const draw = () => {
+    if (!running || !theme) {
+      running = false;
+      return;
+    }
+    frame += 1;
+    ctx.clearRect(0, 0, width, height);
+    if (theme.kind === 'fireworks') fireworks();
+    else falling();
+    ctx.globalAlpha = 1;
+    window.requestAnimationFrame(draw);
+  };
+
+  const show = (slide) => {
+    theme = THEMES[slide && slide.dataset ? slide.dataset.holiday : ''] || null;
+    parts = [];
+    resize();
+    ctx.clearRect(0, 0, width, height);
+    if (!theme) return;
+    if (theme.kind !== 'fireworks') {
+      const target = COUNTS[theme.kind] || 34;
+      for (let i = 0; i < target; i += 1) parts.push(spawn(true));
+    }
+    if (!running) {
+      running = true;
+      window.requestAnimationFrame(draw);
+    }
+  };
+
+  window.addEventListener('resize', () => {
+    if (theme) resize();
+  });
+  slideshow.addEventListener('slidechange', (event) => show(event.detail));
+  show(firstSlide);
+}
 
 const lostFoundImages = document.querySelectorAll('.lost-images img');
 if (lostFoundImages.length) {
