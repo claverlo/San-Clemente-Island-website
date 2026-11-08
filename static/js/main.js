@@ -888,3 +888,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 })();
+
+/* Live flight maps: start on the island, or on the visitor's own spot once they allow their location. */
+document.querySelectorAll('[data-flight-map]').forEach((box) => {
+  const frame = box.querySelector('iframe');
+  const button = box.querySelector('[data-flight-locate]');
+  if (!frame || !button) return;
+  if (!('geolocation' in navigator)) {
+    button.hidden = true;
+    return;
+  }
+  const label = button.querySelector('span');
+  const centerOn = (position) => {
+    const url = new URL(frame.src);
+    url.searchParams.set('lat', position.coords.latitude.toFixed(4));
+    url.searchParams.set('lon', position.coords.longitude.toFixed(4));
+    frame.src = url.toString();
+    label.textContent = 'Centered on you';
+    button.disabled = false;
+  };
+  const locate = () => {
+    label.textContent = 'Finding you...';
+    button.disabled = true;
+    navigator.geolocation.getCurrentPosition(centerOn, () => {
+      label.textContent = 'Location blocked - showing the island';
+      button.disabled = false;
+    }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+  };
+  button.addEventListener('click', locate);
+  // Already allowed before? Center on them right away, without asking again.
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+      if (status.state === 'granted') locate();
+    }).catch(() => {});
+  }
+});

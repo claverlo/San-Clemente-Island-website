@@ -7,7 +7,7 @@ urlpatterns = [
     path("listings/<int:pk>/edit/", views.listing_edit, name="listing_edit"), path("listings/<int:pk>/delete/", views.listing_delete, name="listing_delete"),
     path("listings/<int:pk>/report/", views.report_listing, name="report_listing"),
     path("events/", views.events, name="events"), path("announcements/", views.announcements, name="announcements"),
-    path("lost-found/", views.lost_found, name="lost_found"), path("emergency/", views.emergency, name="emergency"),
+    path("lost-found/", views.lost_found, name="lost_found"), path("emergency/", views.emergency, name="emergency"), path("flights/", views.flights, name="flights"),
     path("lost-found/<int:pk>/edit/", views.lost_found_edit, name="lost_found_edit"),
     path("lost-found/<int:pk>/delete/", views.lost_found_delete, name="lost_found_delete"),
     path("lost-found/<int:pk>/report/", views.report_lost_found, name="report_lost_found"),

@@ -172,6 +172,7 @@ def home(request):
         month = int(request.GET["month"])
     return render(request, "community/home.html", {
         "month_holidays": month_highlights(today.year, month),
+        "flights_url": FLIGHTS_PREVIEW_URL,
         "listings": Listing.objects.filter(is_sold=False, moderation_status="approved")[:4],
         "events": Event.objects.upcoming()[:3],
         "contacts": CONTACTS[:3],
@@ -268,6 +269,14 @@ def events(request):
     return render(request, "community/events.html", {"events": Event.objects.upcoming()})
 def announcements(request): return render(request, "community/announcements.html", {"announcements": Announcement.objects.all()})
 def emergency(request): return render(request, "community/emergency.html", {"contacts": CONTACTS})
+
+# Live flight map centered on San Clemente Island (ADS-B Exchange).
+FLIGHTS_URL = "https://globe.adsbexchange.com/?lat=32.92&lon=-118.50&zoom=9"
+# Smaller box on the homepage: same spot, without the side panel.
+FLIGHTS_PREVIEW_URL = FLIGHTS_URL + "&hideSidebar"
+
+
+def flights(request): return render(request, "community/flights.html", {"flights_url": FLIGHTS_URL})
 
 def lost_found(request):
     form = LostFoundForm(request.POST or None, request.FILES or None)
