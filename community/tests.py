@@ -919,13 +919,6 @@ class FederalHolidayTests(TestCase):
         self.assertEqual(got["christmas-day"], date(2027, 12, 24))
         self.assertEqual(got["mlk-day"], date(2027, 1, 18))
 
-    def test_inauguration_day_only_every_four_years(self):
-        from datetime import date
-        from community.holidays import inauguration_day
-        self.assertEqual(inauguration_day(2029).date, date(2029, 1, 20))
-        self.assertEqual(inauguration_day(2013).date, date(2013, 1, 21))  # the 20th was a Sunday
-        self.assertIsNone(inauguration_day(2027))
-
     def test_each_month_shows_only_its_own_holidays(self):
         from community.holidays import holidays_in_month
         slugs = lambda y, m: [h.slug for h in holidays_in_month(y, m)]
@@ -933,7 +926,7 @@ class FederalHolidayTests(TestCase):
         self.assertEqual(slugs(2026, 10), ["columbus-day"])
         self.assertEqual(slugs(2026, 12), ["christmas-day"])
         self.assertEqual(slugs(2026, 3), [])
-        self.assertEqual(slugs(2029, 1), ["new-years-day", "mlk-day", "inauguration-day"])
+        self.assertEqual(slugs(2029, 1), ["new-years-day", "mlk-day"])  # no Inauguration Day slide
 
     def test_popular_days_are_added_to_their_month(self):
         from datetime import date

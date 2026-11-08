@@ -2,8 +2,6 @@
 
 Source: 5 U.S.C. 6103 and OPM's federal holiday schedule (opm.gov/policy-data-oversight/pay-leave/federal-holidays).
 A holiday on a Saturday is observed the Friday before; on a Sunday, the Monday after.
-Inauguration Day (January 20 every fourth year, for the Washington, DC area) moves to January 21 only when the 20th
-is a Sunday, and is not moved when it falls on a Saturday.
 """
 import calendar
 from dataclasses import dataclass
@@ -58,21 +56,8 @@ RULES = [
 ]
 
 
-def inauguration_day(year):
-    """January 20 every fourth year after 1965 (2025, 2029, 2033, ...), or None in other years."""
-    if year < 1965 or (year - 1965) % 4:
-        return None
-    day = date(year, 1, 20)
-    if day.weekday() == 6:  # Sunday: moves to Monday the 21st
-        day = date(year, 1, 21)
-    return Holiday("inauguration-day", "Inauguration Day", "January 20, every four years", day, day)
-
-
 def holidays_in_year(year):
     found = [Holiday(slug, name, rule, when(year), observed(when(year))) for slug, name, rule, when in RULES]
-    inauguration = inauguration_day(year)
-    if inauguration:
-        found.insert(2, inauguration)
     return sorted(found, key=lambda h: h.date)
 
 

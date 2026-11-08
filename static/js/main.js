@@ -217,7 +217,6 @@ function holidayEffects(slideshow, firstSlide) {
   const THEMES = {
     'new-years-day': { kind: 'fireworks', colors: ['#ffd23f', '#ff4fd8', '#4fc3ff', '#ff7a2f', '#ffffff'] },
     'independence-day': { kind: 'fireworks', colors: RWB },
-    'inauguration-day': { kind: 'fireworks', colors: RWB },
     'valentines-day': { kind: 'hearts', colors: ['#ff2d55', '#ff6b8b', '#d10f3f'] },
     'mothers-day': { kind: 'petals', colors: ['#f7a8c8', '#e58ab8', '#fbd3e4', '#c98bd8'] },
     'st-patricks-day': { kind: 'shamrocks', colors: ['#3fbf4f', '#7ed957', '#2e9b3e'] },
