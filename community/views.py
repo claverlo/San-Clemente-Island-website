@@ -24,7 +24,7 @@ from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
 
 CONTACTS = [
-    ("Command Duty Officer", "(619) 571-9512", "Command Duty Officer (CDO) desk"),
+    ("Command Duty Officer", "(619) 571-9512", "Command Duty Officer (CDO)"),
     ("Security", "(619) 572-6930", "Security desk and non-emergency response"),
     ("Air Terminal", "(619) 524-9182", "Flight and passenger information"),
 ]
