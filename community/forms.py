@@ -89,7 +89,7 @@ class CodeField(forms.CharField):
         super().__init__(max_length=12, label="6-digit code", **kwargs)
         self.widget.attrs.update({
             "class": "form-control code-input", "inputmode": "numeric", "autocomplete": "one-time-code",
-            "pattern": "[0-9 ]*", "placeholder": "123456", "autofocus": True,
+            "pattern": "[0-9 ]*", "autofocus": True,
         })
 
     def clean(self, value):
