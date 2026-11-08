@@ -1778,3 +1778,31 @@ img.hero-slide.active[data-effect] {
     border:0;
     display:block
 }
+
+/* "Center on my location" button over the flight maps */
+.flights-preview,
+.flights-map {
+    position:relative
+}
+.flight-locate {
+    position:absolute;
+    z-index:2;
+    left:50%;
+    bottom:14px;
+    transform:translateX(-50%);
+    display:inline-flex;
+    align-items:center;
+    gap:.4rem;
+    padding:.5rem .95rem;
+    border:0;
+    border-radius:999px;
+    background:var(--gold, #f6bd2f);
+    color:#071f3d;
+    font-weight:700;
+    font-size:.92rem;
+    box-shadow:0 4px 14px rgba(0,0,0,.3);
+    white-space:nowrap
+}
+.flight-locate:disabled {
+    opacity:.8
+}
