@@ -233,9 +233,12 @@ function holidayEffects(slideshow, firstSlide) {
     'halloween': { kind: 'bats', colors: ['#111111', '#2a1a0a'] },
     'thanksgiving-day': { kind: 'leaves', colors: ['#d2691e', '#b5651d', '#e8a33d', '#a0522d', '#cc4b1f'] },
     'christmas-day': { kind: 'snow', colors: ['#ffffff'] },
+    bubbles: { kind: 'bubbles', colors: ['rgba(220, 245, 255, 0.85)'] },
+    gulls: { kind: 'gulls', colors: ['#f4f6f8', '#e2e6ea'] },
+    sunlight: { kind: 'motes', colors: ['#fff3c4', '#ffe9a0', '#ffffff'] },
   };
-  const COUNTS = { hearts: 16, bats: 7, snow: 70, sparkles: 26, stars: 22 };
-  const SWAY = { hearts: 1, snow: 1, petals: 1, leaves: 1 };
+  const COUNTS = { hearts: 16, bats: 7, snow: 70, sparkles: 26, stars: 22, bubbles: 22, gulls: 4, motes: 30 };
+  const SWAY = { hearts: 1, snow: 1, petals: 1, leaves: 1, bubbles: 1 };
   let theme = null;
   let parts = [];
   let frame = 0;
@@ -259,6 +262,15 @@ function holidayEffects(slideshow, firstSlide) {
     const kind = theme.kind;
     const color = pick(theme.colors);
     const s = scale();
+    if (kind === 'bubbles') {
+      return { x: rand(0, width), y: anywhere ? rand(0, height) : height + 20, vx: 0, vy: -rand(0.5, 1.4), s: rand(2, 7) * s, a: rand(0, 6), color };
+    }
+    if (kind === 'gulls') {
+      return { x: anywhere ? rand(0, width) : -40, y: rand(height * 0.05, height * 0.4), vx: rand(0.5, 1.1), vy: rand(-0.1, 0.1), s: rand(9, 16) * s, a: rand(0, 6), spin: 0, color };
+    }
+    if (kind === 'motes') {
+      return { x: rand(0, width), y: rand(0, height), vx: rand(-0.25, 0.25), vy: -rand(0.05, 0.3), s: rand(1.5, 3.5) * s, a: rand(0, 6), spin: 0, life: rand(150, 320), age: 0, color };
+    }
     if (kind === 'hearts') {
       return { x: rand(0, width), y: anywhere ? rand(0, height) : height + 20, vx: 0, vy: -rand(0.5, 1.2), s: rand(8, 18) * s, a: rand(0, 6), color };
     }
@@ -331,7 +343,7 @@ function holidayEffects(slideshow, firstSlide) {
   };
 
   const bat = (p) => {
-    const flap = Math.sin(frame * 0.35 + p.a) * 0.6;
+    const flap = Math.sin(frame * (theme.kind === 'gulls' ? 0.12 : 0.35) + p.a) * 0.6;
     ctx.save();
     ctx.translate(p.x, p.y + Math.sin(frame * 0.05 + p.a) * 6);
     ctx.fillStyle = p.color;
@@ -410,6 +422,32 @@ function holidayEffects(slideshow, firstSlide) {
       p.a += p.spin === undefined ? 0.02 : p.spin;
       p.x += p.vx + (SWAY[kind] ? Math.sin(frame * 0.02 + p.a) * 0.4 : 0);
       p.y += p.vy;
+      if (kind === 'motes') {
+        p.age += 1;
+        ctx.globalAlpha = Math.sin(Math.PI * Math.min(1, p.age / p.life)) * 0.8;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = p.s * 4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        return p.age < p.life;
+      }
+      if (kind === 'bubbles') {
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.arc(p.x - p.s * 0.35, p.y - p.s * 0.35, p.s * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        return p.y > -20;
+      }
       if (kind === 'sparkles' || kind === 'stars') {
         p.age += 1;
         star(p, Math.sin(Math.PI * Math.min(1, p.age / p.life)) * 0.9);
@@ -417,7 +455,7 @@ function holidayEffects(slideshow, firstSlide) {
       }
       if (kind === 'hearts') heart(p);
       else if (kind === 'shamrocks') shamrock(p);
-      else if (kind === 'bats') bat(p);
+      else if (kind === 'bats' || kind === 'gulls') bat(p);
       else if (kind === 'leaves') leaf(p);
       else flake(p);
       return p.y > -40 && p.y < height + 40 && p.x < width + 40;
@@ -438,7 +476,7 @@ function holidayEffects(slideshow, firstSlide) {
   };
 
   const show = (slide) => {
-    theme = THEMES[slide && slide.dataset ? slide.dataset.holiday : ''] || null;
+    theme = THEMES[slide && slide.dataset ? slide.dataset.holiday || slide.dataset.effect : ''] || null;
     parts = [];
     resize();
     ctx.clearRect(0, 0, width, height);

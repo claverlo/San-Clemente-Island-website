@@ -1741,7 +1741,8 @@ svg {
 }
 
 /* Holiday slides come alive: slow zoom and drift, with a themed effect drawn on top */
-.holiday-slide.active img {
+.holiday-slide.active img,
+img.hero-slide.active {
     animation:holiday-drift 9s ease-in-out infinite alternate
 }
 @keyframes holiday-drift {
@@ -1757,6 +1758,6 @@ svg {
     pointer-events:none
 }
 @media (prefers-reduced-motion: reduce) {
-    .holiday-slide.active img { animation:none }
+    .holiday-slide.active img, img.hero-slide.active { animation:none }
     .holiday-effects { display:none }
 }
