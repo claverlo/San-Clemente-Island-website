@@ -284,3 +284,9 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"Message from {self.name}"
+
+
+class RateLimitHit(models.Model):
+    """One attempt at something we limit (wrong password, report, sign-up...). Old rows are deleted after a day."""
+    key = models.CharField(max_length=200, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)

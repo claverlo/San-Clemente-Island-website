@@ -1,6 +1,8 @@
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.models import User
 
+from .limits import client_ip, too_many
+
 
 def find_accounts(identifier):
     """Accounts matching what someone typed in the login box: an email, or an older account's username."""
@@ -12,6 +14,20 @@ def find_accounts(identifier):
         if accounts:
             return accounts
     return list(User.objects.filter(username__iexact=identifier).order_by("pk")[:1])
+
+
+def login_key(identifier):
+    """One counter per account, whether they typed the email or the old username."""
+    accounts = find_accounts(identifier)
+    if accounts:
+        return f"user-{accounts[0].pk}"
+    return (identifier or "").strip().lower() or "blank"
+
+
+def login_throttled(request, identifier):
+    """Too many wrong passwords lately for this account (from anywhere) or from this connection (any account).
+    This applies to everyone, admins included, on every login page."""
+    return too_many("login-fail-account", login_key(identifier)) or too_many("login-fail-ip", client_ip(request))
 
 
 def is_locked(user):
@@ -27,6 +43,8 @@ class EmailOrUsernameBackend(ModelBackend):
 
     def authenticate(self, request, username=None, password=None, **kwargs):
         username = (username or kwargs.get(User.USERNAME_FIELD) or "").strip()
+        if login_throttled(request, username):
+            return None
         if "@" in username:
             for user in User.objects.filter(email__iexact=username).order_by("pk"):
                 if user.check_password(password) and self.user_can_authenticate(user):

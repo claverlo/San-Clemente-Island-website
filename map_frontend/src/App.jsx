@@ -454,7 +454,12 @@ export default function App({ adminMode = false }) {
       )
     )
       return;
-    await api.reportPhoto(spots[spotIndex].id, photoId);
+    try {
+      await api.reportPhoto(spots[spotIndex].id, photoId);
+    } catch (err) {
+      alert(err.message || "That report couldn't be sent.");
+      return;
+    }
     await refreshSpots();
   };
 
@@ -466,7 +471,13 @@ export default function App({ adminMode = false }) {
 
   const uploadToPending = async (index, file) => {
     if (!file) return;
-    await api.uploadPhoto(spots[index].id, file);
+    try {
+      await api.uploadPhoto(spots[index].id, file);
+    } catch (err) {
+      alert(err.message || "That photo couldn't be added.");
+      return;
+    }
+    alert("Thanks! Your photo was sent to admin for review.");
     await refreshSpots();
   };
 
@@ -482,7 +493,12 @@ export default function App({ adminMode = false }) {
 
   const changeMain = async (index, file) => {
     if (!file) return;
-    await api.changeMainImage(spots[index].id, file);
+    try {
+      await api.changeMainImage(spots[index].id, file);
+    } catch (err) {
+      alert(err.message || "That photo couldn't be used.");
+      return;
+    }
     await refreshSpots();
   };
 

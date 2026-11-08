@@ -1,4 +1,8 @@
+import uuid
+
+from django import forms
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.contrib.auth import authenticate, login as auth_login, logout
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
@@ -13,6 +17,26 @@ from rest_framework.views import APIView
 from .models import Photo, Spot
 from .permissions import IsAdminSession
 from .serializers import SpotSerializer
+
+
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+SAFE_EXTENSIONS = {"JPEG": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp"}
+
+
+def checked_photo(upload):
+    """Return the upload only if it is a real picture (JPEG, PNG, GIF or WebP) under 10 MB, renamed safely.
+    Anything else (web pages, scripts, other files) raises ValidationError."""
+    if not upload:
+        raise ValidationError("Choose a photo to upload.")
+    if upload.size > MAX_PHOTO_BYTES:
+        raise ValidationError("That photo is too big. Please use one under 10 MB.")
+    image = forms.ImageField().clean(upload)
+    kind = getattr(getattr(image, "image", None), "format", None)
+    if kind not in SAFE_EXTENSIONS:
+        raise ValidationError("Please upload a JPG, PNG, GIF or WebP photo.")
+    image.name = f"{uuid.uuid4().hex}.{SAFE_EXTENSIONS[kind]}"
+    image.seek(0)
+    return image
 
 
 def spot_context(request):
@@ -104,9 +128,10 @@ class SpotMainImageView(APIView):
 
     def post(self, request, spot_id):
         spot = get_object_or_404(Spot, id=spot_id)
-        image = request.FILES.get("image")
-        if not image:
-            return Response({"detail": "image file is required."}, status=400)
+        try:
+            image = checked_photo(request.FILES.get("image"))
+        except ValidationError as error:
+            return Response({"detail": error.messages[0]}, status=400)
 
         spot.main_image = image
         spot.save()
@@ -119,10 +144,19 @@ class SpotPhotoUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, spot_id):
+        from community import limits
+        from community.models import Profile
+        if not request.user.is_authenticated:
+            return Response({"detail": "Please log in to SCI Connect to add photos to the map."}, status=403)
+        if not request.user.is_staff and not Profile.objects.get_or_create(user=request.user)[0].can_post:
+            return Response({"detail": "Please verify your email before adding photos."}, status=403)
+        if not limits.allow("map-photo", f"user-{request.user.pk}"):
+            return Response({"detail": "You've added a lot of photos. Please wait an hour and try again."}, status=429)
         spot = get_object_or_404(Spot, id=spot_id)
-        image = request.FILES.get("image")
-        if not image:
-            return Response({"detail": "image file is required."}, status=400)
+        try:
+            image = checked_photo(request.FILES.get("image"))
+        except ValidationError as error:
+            return Response({"detail": error.messages[0]}, status=400)
 
         is_admin = bool(request.user.is_authenticated and request.user.is_staff)
         status_value = Photo.STATUS_APPROVED if is_admin else Photo.STATUS_PENDING
@@ -158,7 +192,10 @@ class PhotoReportView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, spot_id, photo_id):
+        from community import limits
         photo = get_object_or_404(Photo, id=photo_id, spot_id=spot_id)
+        if not limits.allow("report", limits.client_ip(request)):
+            return Response({"detail": "You've sent a lot of reports. Please wait a bit and try again."}, status=429)
         if photo.status == Photo.STATUS_APPROVED:
             photo.status = Photo.STATUS_PENDING
             photo.save(update_fields=["status"])

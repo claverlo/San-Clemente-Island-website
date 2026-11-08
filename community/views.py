@@ -15,13 +15,16 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 from random import randint
 from .chat import ai_answer, matching_messages, shrink_photo, with_replies
 from .backends import find_accounts
-from .codes import check_code, seconds_until_resend, send_code
+from .codes import check_code, seconds_until_resend, send_code, wait_text
 from .holidays import month_highlights
 from .forms import AlertSettingsForm, ChatMessageForm, DeleteAccountForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm, ResetCodeForm, ResetRequestForm, VerifyCodeForm
 from .models import Announcement, ChatMessage, ContactMessage, ContentReport, EmailCode, Event, Listing, ListingImage, LostFound, Profile, LOST_FOUND_ALERT
 from .notifications import notify_subscribers
 from .moderation import moderate_text_fields, moderate_uploaded_images
 from .sms import send_phone_verification_text
+from . import limits
+
+TOO_MANY_REPORTS = "You've sent a lot of reports in a short time. Please wait a bit and try again, or use Contact us."
 
 CONTACTS = [
     ("Command Duty Officer", "(619) 571-9512", "Command Duty Officer (CDO)"),
@@ -65,7 +68,7 @@ def verify_code(request):
     if request.method == "POST" and request.POST.get("action") == "resend":
         wait = seconds_until_resend(request.user, EmailCode.VERIFY)
         if wait:
-            messages.warning(request, f"Please wait {wait} seconds before asking for another code.")
+            messages.warning(request, f"Please wait {wait_text(wait)} before asking for another code.")
         else:
             try:
                 send_verification_email(request, profile)
@@ -89,6 +92,9 @@ RESET_SESSION_KEY = "reset_email"
 def password_reset_request(request):
     form = ResetRequestForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
+        if not limits.allow("reset-request", limits.client_ip(request)):
+            messages.error(request, "Too many password reset requests. Please wait an hour and try again.")
+            return redirect("password_reset")
         email = form.cleaned_data["email"].strip().lower()
         request.session[RESET_SESSION_KEY] = email
         accounts = [user for user in find_accounts(email) if user.is_active and user.email]
@@ -112,7 +118,7 @@ def password_reset_code(request):
         if user:
             wait = seconds_until_resend(user, EmailCode.RESET)
             if wait:
-                messages.warning(request, f"Please wait {wait} seconds before asking for another code.")
+                messages.warning(request, f"Please wait {wait_text(wait)} before asking for another code.")
             else:
                 send_code(user, EmailCode.RESET)
                 messages.success(request, "A new code is on its way.")
@@ -371,6 +377,9 @@ def lost_found_edit(request, pk):
 def report_listing(request, pk):
     listing = get_object_or_404(Listing.all_objects, pk=pk)
     if request.method == "POST":
+        if not limits.allow("report", limits.client_ip(request)):
+            messages.error(request, TOO_MANY_REPORTS)
+            return redirect("marketplace")
         reason = request.POST.get("reason", "").strip()[:255]
         reporter = request.user if request.user.is_authenticated else None
         if reporter:
@@ -395,6 +404,9 @@ def report_listing(request, pk):
 def report_lost_found(request, pk):
     item = get_object_or_404(LostFound, pk=pk)
     if request.method == "POST":
+        if not limits.allow("report", limits.client_ip(request)):
+            messages.error(request, TOO_MANY_REPORTS)
+            return redirect("lost_found")
         reason = request.POST.get("reason", "").strip()[:255]
         reporter = request.user if request.user.is_authenticated else None
         if reporter:
@@ -462,7 +474,10 @@ def chat(request):
     if query:
         chat_messages = with_replies(visible, list(matching_messages(visible, query).order_by("-created_at")[:15]))[:40]
         recent_photos = list(visible.filter(moderation_status="approved", created_at__gte=timezone.now() - ChatMessage.PHOTO_LIFETIME).exclude(image="").order_by("-created_at")[:4])
-        answer, cited_ids = ai_answer(query, chat_messages, recent_photos)
+        if limits.allow("ai-search", limits.client_ip(request)):
+            answer, cited_ids = ai_answer(query, chat_messages, recent_photos)
+        else:
+            cited_ids = []
         by_id = {m.pk: m for m in chat_messages + recent_photos}
         cited = [by_id[i] for i in cited_ids if i in by_id]
         chat_messages += [m for m in cited if m not in chat_messages]
@@ -502,6 +517,9 @@ def chat_delete(request, pk):
 def report_chat_message(request, pk):
     chat_message = get_object_or_404(ChatMessage, pk=pk)
     if request.method == "POST":
+        if not limits.allow("report", limits.client_ip(request)):
+            messages.error(request, TOO_MANY_REPORTS)
+            return redirect("chat")
         reason = request.POST.get("reason", "").strip()[:255]
         reporter = request.user if request.user.is_authenticated else None
         if reporter:
@@ -553,6 +571,9 @@ def delete_account(request):
 def register(request):
     form = RegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
+        if not limits.allow("signup", limits.client_ip(request)):
+            messages.error(request, "Too many new accounts from this connection. Please try again in an hour.")
+            return render(request, "registration/register.html", {"form": form})
         user = form.save()
         profile = Profile.objects.create(user=user)
         login(request, user)
@@ -647,6 +668,9 @@ def contact_admin(request):
         initial = {"name": request.user.get_full_name() or request.user.username, "email": request.user.email}
     form = ContactMessageForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
+        if not limits.allow("contact", limits.client_ip(request)):
+            messages.error(request, "You've sent several messages already. Please wait an hour before sending another.")
+            return render(request, "community/contact.html", {"form": form})
         contact_message = form.save()
         send_mail(
             f"SCI List contact message from {contact_message.name}",

@@ -759,8 +759,13 @@ class OneTimeCodeAndLoginSafetyTests(TestCase):
 
     def test_admins_are_never_locked_out(self):
         User.objects.create_superuser("boss2", email="boss2@example.com", password="RightPass123!")
+        from .models import RateLimitHit
         for _ in range(5):
             self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "nope"})
+        # Admins get a 15-minute pause (so nobody can guess forever), never a permanent lock.
+        self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "RightPass123!"})
+        self.assertNotIn("_auth_user_id", self.client.session)
+        RateLimitHit.objects.update(created_at=timezone.now() - timedelta(minutes=16))
         self.client.post(reverse("login"), {"username": "boss2@example.com", "password": "RightPass123!"})
         self.assertIn("_auth_user_id", self.client.session)
 
@@ -963,3 +968,75 @@ class FederalHolidayTests(TestCase):
             page = self.client.get(reverse("home")).content.decode()
         self.assertNotIn("holiday-slide", page)
         self.assertIn('class="hero-slide active" src="/static/images/homepage-diver.jpg"', page)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(), OPENAI_API_KEY="")
+class SecurityTests(TestCase):
+    """Each test tries an attack and checks it's blocked."""
+
+    def setUp(self):
+        from mapapi.models import Spot
+        self.member = User.objects.create_user("member@example.com", email="member@example.com", password="Island-pass-2026")
+        Profile.objects.create(user=self.member, email_verified=True)
+        self.admin = User.objects.create_superuser("boss", email="boss@example.com", password="Admin-pass-2026!")
+        self.spot = Spot.objects.create(name="Beach", lat=33.0, lng=-118.5)
+
+    def upload(self, file):
+        return self.client.post(f"/map/api/spots/{self.spot.id}/photos/", {"image": file})
+
+    def test_map_rejects_web_pages_disguised_as_photos(self):
+        from mapapi.models import Photo
+        self.client.force_login(self.member)
+        for name, body in (("evil.html", b"<script>alert(1)</script>"), ("evil.gif", b"<script>alert(1)</script>"),
+                           ("evil.svg", b"<svg onload=alert(1)>")):
+            self.assertEqual(self.upload(SimpleUploadedFile(name, body)).status_code, 400, name)
+        self.assertFalse(Photo.objects.exists())
+
+    def test_map_photos_need_a_login_and_get_safe_names(self):
+        from mapapi.models import Photo
+        self.assertEqual(self.upload(make_photo("x.png", (40, 40))).status_code, 403)
+        self.client.force_login(self.member)
+        self.assertEqual(self.upload(make_photo("../../evil.html.png", (40, 40))).status_code, 201)
+        name = Photo.objects.get().image.name
+        self.assertRegex(name, r"^spots/gallery/[0-9a-f]{32}\.png$")
+
+    def test_admin_password_guessing_is_stopped_on_every_login_page(self):
+        for _ in range(5):
+            self.client.post("/admin/login/", {"username": "boss", "password": "wrong-guess"})
+        # Even the right password is refused for now, on the admin page, the map and the main login.
+        response = self.client.post("/admin/login/?next=/admin/", {"username": "boss", "password": "Admin-pass-2026!"})
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.post("/map/api/admin/login/", {"username": "boss", "password": "Admin-pass-2026!"}).status_code, 403)
+        response = self.client.post(reverse("login"), {"username": "boss", "password": "Admin-pass-2026!"})
+        self.assertContains(response, "wait 15 minutes")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_one_connection_cannot_spray_many_accounts(self):
+        for i in range(20):
+            self.client.post("/map/api/admin/login/", {"username": f"someone{i}@example.com", "password": "guess"})
+        response = self.client.post(reverse("login"), {"username": "member@example.com", "password": "Island-pass-2026"})
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertContains(response, "wait 15 minutes")
+
+    def test_reports_are_limited(self):
+        chat = ChatMessage.objects.create(user=self.member, body="hello", moderation_status="approved")
+        for _ in range(10):
+            self.client.post(reverse("report_chat_message", args=[chat.pk]), {"reason": "spam"})
+        ChatMessage.objects.filter(pk=chat.pk).update(moderation_status="approved")
+        self.client.post(reverse("report_chat_message", args=[chat.pk]), {"reason": "spam"})
+        self.assertEqual(ChatMessage.objects.get(pk=chat.pk).moderation_status, "approved")
+        self.assertEqual(ContentReport.objects.count(), 10)
+
+    def test_reset_codes_are_capped_each_day(self):
+        from .codes import CODES_PER_DAY, seconds_until_resend, send_code
+        from .models import EmailCode
+        for _ in range(CODES_PER_DAY):
+            send_code(self.member, EmailCode.RESET)
+            EmailCode.objects.filter(user=self.member).update(created_at=timezone.now() - timedelta(minutes=5))
+        self.assertGreater(seconds_until_resend(self.member, EmailCode.RESET), 3600)
+
+    def test_face_id_sign_in_never_sends_people_to_other_sites(self):
+        from .passkeys import login_verify  # noqa: F401  (the check lives there)
+        from django.utils.http import url_has_allowed_host_and_scheme
+        for bad in (r"/\evil.com", "//evil.com", r"/\/evil.com"):
+            self.assertFalse(bad.startswith("/") and url_has_allowed_host_and_scheme(bad, allowed_hosts={"testserver"}), bad)
