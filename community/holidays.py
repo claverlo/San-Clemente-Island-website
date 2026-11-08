@@ -107,7 +107,6 @@ OBSERVANCES = [
     ("mothers-day", "Mother's Day", "Second Sunday in May", lambda y: nth_weekday(y, 5, SUNDAY, 2)),
     ("fathers-day", "Father's Day", "Third Sunday in June", lambda y: nth_weekday(y, 6, SUNDAY, 3)),
     ("halloween", "Halloween", "October 31", lambda y: date(y, 10, 31)),
-    ("new-years-eve", "New Year's Eve", "December 31", lambda y: date(y, 12, 31)),
 ]
 
 

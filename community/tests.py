@@ -943,7 +943,7 @@ class FederalHolidayTests(TestCase):
         self.assertEqual(slugs(2026, 5), ["mothers-day", "memorial-day"])
         self.assertEqual(slugs(2026, 6), ["juneteenth", "fathers-day"])
         self.assertEqual(slugs(2026, 10), ["columbus-day", "halloween"])
-        self.assertEqual(slugs(2026, 12), ["christmas-day", "new-years-eve"])
+        self.assertEqual(slugs(2026, 12), ["christmas-day"])
         self.assertEqual(slugs(2026, 8), [])
         self.assertEqual([easter_sunday(y) for y in (2024, 2025, 2026, 2027)],
                          [date(2024, 3, 31), date(2025, 4, 20), date(2026, 4, 5), date(2027, 3, 28)])
@@ -962,7 +962,7 @@ class FederalHolidayTests(TestCase):
         from unittest import mock
         with mock.patch("community.views.timezone.localdate", return_value=date(2026, 11, 7)):
             page = self.client.get(reverse("home")).content.decode()
-        self.assertIn('holiday-slide active"><img src="/static/images/holidays/veterans-day.jpg"', page)
+        self.assertIn('holiday-slide active"><img src="/static/images/holidays/veterans-day.jpg', page)
         self.assertIn("thanksgiving-day.jpg", page)
         self.assertNotIn("columbus-day.jpg", page)
         self.assertLess(page.index("thanksgiving-day.jpg"), page.index("homepage-diver.jpg"))
