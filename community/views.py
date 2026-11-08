@@ -16,6 +16,7 @@ from random import randint
 from .chat import ai_answer, matching_messages, shrink_photo, with_replies
 from .backends import find_accounts
 from .codes import check_code, seconds_until_resend, send_code
+from .holidays import month_highlights
 from .forms import AlertSettingsForm, ChatMessageForm, DeleteAccountForm, ContactMessageForm, ListingForm, LostFoundForm, ProfileForm, RegistrationForm, ResetCodeForm, ResetRequestForm, VerifyCodeForm
 from .models import Announcement, ChatMessage, ContactMessage, ContentReport, EmailCode, Event, Listing, ListingImage, LostFound, Profile, LOST_FOUND_ALERT
 from .notifications import notify_subscribers
@@ -164,7 +165,13 @@ def notify_admin_of_report(request, item_label, reporter, reason):
 
 def home(request):
     Event.purge_expired()
+    today = timezone.localdate()
+    month = today.month
+    # Local preview only: /?month=7 shows July's holiday slides. Ignored on the live site.
+    if settings.DEBUG and request.GET.get("month", "").isdigit() and 1 <= int(request.GET["month"]) <= 12:
+        month = int(request.GET["month"])
     return render(request, "community/home.html", {
+        "month_holidays": month_highlights(today.year, month),
         "listings": Listing.objects.filter(is_sold=False, moderation_status="approved")[:4],
         "events": Event.objects.upcoming()[:3],
         "contacts": CONTACTS[:3],

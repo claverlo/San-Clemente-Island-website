@@ -405,10 +405,10 @@ svg {
 
 .section-community-board .section-heading h2 {
     max-width: 920px;
-    font-family: "Trebuchet MS", "Segoe UI", "Gill Sans", sans-serif;
-    font-size: clamp(1rem, 0.92rem + 0.35vw, 1.35rem) !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.4rem) !important;
     font-weight: 700;
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
     line-height: 1.24;
     text-wrap: pretty;
 }
@@ -1714,4 +1714,50 @@ svg {
     max-width:60%;
     height:auto;
     margin:0 auto 1rem
+}
+/* Federal holiday slides at the start of the homepage slideshow (current month only) */
+.holiday-slide {
+    margin:0
+}
+.holiday-slide img {
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block
+}
+.holiday-slide figcaption {
+    position:absolute;
+    left:1rem;
+    bottom:2.4rem;
+    max-width:calc(100% - 2rem);
+    padding:.4rem .75rem;
+    border-radius:4px;
+    background:rgba(7,31,61,.82);
+    color:#fff;
+    font-weight:700;
+    font-size:clamp(.85rem, .78rem + .3vw, 1.05rem);
+    line-height:1.25;
+    border-left:4px solid var(--gold)
+}
+
+/* Holiday slides come alive: slow zoom and drift, with a themed effect drawn on top */
+.holiday-slide.active img,
+img.hero-slide.active[data-effect] {
+    animation:holiday-drift 9s ease-in-out infinite alternate
+}
+@keyframes holiday-drift {
+    from { transform:scale(1) translate(0,0) }
+    to { transform:scale(1.07) translate(-1.2%,-1%) }
+}
+.holiday-effects {
+    position:absolute;
+    inset:0;
+    z-index:1;
+    width:100%;
+    height:100%;
+    pointer-events:none
+}
+@media (prefers-reduced-motion: reduce) {
+    .holiday-slide.active img, img.hero-slide.active[data-effect] { animation:none }
+    .holiday-effects { display:none }
 }
