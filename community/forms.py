@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .backends import find_accounts, is_locked
+from .backends import find_accounts, is_locked, login_throttled
 from .models import ChatMessage, ContactMessage, Listing, LostFound, Profile, alert_choices
 
 def normalize_phone(value):
@@ -41,6 +41,7 @@ class BootstrapMixin:
             else:
                 field.widget.attrs["class"] = "form-control"
 MAX_WRONG_PASSWORDS = 4
+THROTTLED_MESSAGE = "Too many wrong tries. For your safety, please wait 15 minutes and try again, or tap “Forgot password?” below."
 LOCKED_MESSAGE = ("Too many wrong passwords, so this account is locked to keep it safe. "
                   "Tap \u201cForgot password?\u201d below to get a code and set a new password.")
 
@@ -61,6 +62,8 @@ class StyledAuthenticationForm(BootstrapMixin, AuthenticationForm):
         lockable = [user for user in find_accounts(typed) if not user.is_superuser]
         if any(is_locked(user) for user in lockable):
             raise forms.ValidationError(LOCKED_MESSAGE, code="locked")
+        if login_throttled(self.request, typed):
+            raise forms.ValidationError(THROTTLED_MESSAGE, code="throttled")
         try:
             cleaned = super().clean()
         except forms.ValidationError:

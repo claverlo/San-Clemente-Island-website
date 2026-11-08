@@ -54,3 +54,12 @@ REST_FRAMEWORK = {
 SESSION_COOKIE_AGE = 12 * 60 * 60
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True
+
+# Security on the live site (https only). Left off on the local test copy, which runs on plain http.
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True      # login cookie is never sent over plain http
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365   # browsers always use https for this site
+SESSION_COOKIE_HTTPONLY = True
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024

@@ -1,5 +1,6 @@
 """One-time codes emailed to members (verify email at sign-up, reset a forgotten password)."""
 import secrets
+from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
@@ -17,13 +18,30 @@ REASONS = {
 }
 
 
+CODES_PER_DAY = 5  # with 5 tries per code, at most 25 guesses a day out of a million possible codes
+
+
 def seconds_until_resend(user, purpose):
     """How long the member must wait before another code can be sent (0 means send now)."""
-    latest = EmailCode.objects.filter(user=user, purpose=purpose).first()
-    if not latest:
+    now = timezone.now()
+    recent = list(EmailCode.objects.filter(user=user, purpose=purpose, created_at__gte=now - timedelta(days=1))
+                  .order_by("created_at").values_list("created_at", flat=True))
+    if not recent:
         return 0
-    wait = (latest.created_at + EmailCode.RESEND_WAIT) - timezone.now()
-    return max(0, int(wait.total_seconds()) + 1) if wait.total_seconds() > 0 else 0
+    waits = [(recent[-1] + EmailCode.RESEND_WAIT) - now]
+    if len(recent) >= CODES_PER_DAY:
+        waits.append((recent[-CODES_PER_DAY] + timedelta(days=1)) - now)
+    wait = max(waits).total_seconds()
+    return int(wait) + 1 if wait > 0 else 0
+
+
+def wait_text(seconds):
+    """'45 seconds', '12 minutes' or '3 hours' for messages."""
+    if seconds < 120:
+        return f"{seconds} seconds"
+    if seconds < 2 * 3600:
+        return f"{seconds // 60} minutes"
+    return f"{seconds // 3600} hours"
 
 
 def send_code(user, purpose, extra_text=""):

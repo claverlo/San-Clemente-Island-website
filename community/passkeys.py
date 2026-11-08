@@ -13,6 +13,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from webauthn import (
     generate_authentication_options,
@@ -153,7 +154,7 @@ def login_verify(request):
     login(request, user, backend="community.backends.EmailOrUsernameBackend")
     request.session.set_expiry(int(SIGNED_IN_FOR.total_seconds()))
     next_url = data.get("next") or ""
-    if not next_url.startswith("/") or next_url.startswith("//"):
+    if not next_url.startswith("/") or not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         next_url = reverse("dashboard")
     return JsonResponse({"ok": True, "redirect": next_url})
 

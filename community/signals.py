@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.contrib.auth.signals import user_logged_in
+from django.contrib.auth.signals import user_logged_in, user_login_failed
 from django.core.mail import send_mail
 from django.dispatch import receiver
 from django.utils import timezone
@@ -19,3 +19,12 @@ def notify_admin_of_staff_login(sender, request, user, **kwargs):
         [settings.REPORT_ADMIN_EMAIL],
         fail_silently=True,
     )
+
+
+@receiver(user_login_failed)
+def count_failed_login(sender, credentials, request=None, **kwargs):
+    """Every wrong password, on any login page (site, admin, map), counts toward the limit."""
+    from .limits import client_ip, record
+    from .backends import login_key
+    record("login-fail-account", login_key(credentials.get("username")))
+    record("login-fail-ip", client_ip(request))
