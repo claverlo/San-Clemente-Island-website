@@ -1040,3 +1040,95 @@ class SecurityTests(TestCase):
         from django.utils.http import url_has_allowed_host_and_scheme
         for bad in (r"/\evil.com", "//evil.com", r"/\/evil.com"):
             self.assertFalse(bad.startswith("/") and url_has_allowed_host_and_scheme(bad, allowed_hosts={"testserver"}), bad)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(), OPENAI_API_KEY="")
+class NotificationBellTests(TestCase):
+    def setUp(self):
+        from .models import Notification
+        self.Notification = Notification
+        self.asker = User.objects.create_user("asker@example.com", email="asker@example.com", password="Island-pass-2026", first_name="Ann")
+        self.helper = User.objects.create_user("helper@example.com", email="helper@example.com", password="Island-pass-2026", first_name="Bo")
+        self.boss = User.objects.create_superuser("boss", email="boss@example.com", password="Admin-pass-2026!")
+        for u in (self.asker, self.helper):
+            Profile.objects.create(user=u, email_verified=True)
+
+    def texts(self, user):
+        return [n.text for n in self.Notification.objects.filter(user=user)]
+
+    def test_answer_to_a_chat_question(self):
+        ChatMessage.objects.create(user=self.asker, body="Is the ships store open?", moderation_status="approved")
+        ChatMessage.objects.create(user=self.helper, body="Yes until 3", moderation_status="approved")
+        ChatMessage.objects.create(user=self.helper, body="and Sunday too", moderation_status="approved")
+        self.assertEqual(len(self.texts(self.asker)), 1)  # one per question, not one per message
+        self.assertIn("Bo posted in Island Chat after your question", self.texts(self.asker)[0])
+        self.assertEqual(self.texts(self.helper), [])
+
+    def test_post_waiting_then_approved_or_rejected(self):
+        listing = Listing.objects.create(seller=self.asker, title="Kayak", description="Blue", price=50, category="For Sale",
+                                         condition="Good", contact_email="a@example.com", moderation_status="pending")
+        self.assertIn("Needs your approval", self.texts(self.boss)[0])
+        listing.moderation_status = "approved"
+        listing.save()
+        self.assertIn("was approved", self.texts(self.asker)[0])
+        item = LostFound.objects.create(user=self.asker, kind="Lost", item="Keys", description="Red keychain", location="Galley", date=timezone.localdate(),
+                                        moderation_status="pending")
+        item.moderation_status = "rejected"
+        item.moderation_notes = "Missing details"
+        item.save()
+        self.assertIn("wasn't approved. Reason: Missing details", self.texts(self.asker)[0])
+
+    def test_announcements_events_reports_and_contact(self):
+        from .models import Announcement, ContactMessage
+        Announcement.objects.create(title="Water outage", body="Tuesday", priority="Urgent")
+        Event.objects.create(title="Poker night", description="Bring chips", date=timezone.now() + timedelta(days=2), location="MWR")
+        self.assertTrue(any("Urgent announcement: Water outage" in t for t in self.texts(self.helper)))
+        self.assertTrue(any("New event: Poker night" in t for t in self.texts(self.helper)))
+        chat = ChatMessage.objects.create(user=self.helper, body="hello", moderation_status="approved")
+        self.client.post(reverse("report_chat_message", args=[chat.pk]), {"reason": "rude"})
+        ContactMessage.objects.create(name="Visitor", email="v@example.com", message="Hi")
+        boss = self.texts(self.boss)
+        self.assertTrue(any("Someone reported a chat message" in t for t in boss))
+        self.assertTrue(any("New Contact us message from Visitor" in t for t in boss))
+        self.assertFalse(any("reported" in t for t in self.texts(self.helper)))
+
+    def test_alert_matches_ring_the_bell(self):
+        Profile.objects.filter(user=self.helper).update(alert_keywords="kayak")
+        self.client.force_login(self.asker)
+        self.client.post(reverse("listing_create"), {"title": "Kayak for sale", "description": "Blue kayak", "price": "50",
+                                                     "category": "For Sale", "condition": "Good", "location": "Beach",
+                                                     "contact_email": "asker@example.com"})
+        self.assertTrue(any("mentions \u201ckayak\u201d" in t for t in self.texts(self.helper)), self.texts(self.helper))
+
+    def test_bell_shows_count_opens_and_marks_read(self):
+        from .bell import notify
+        note = notify(self.asker, "Hello there", "/marketplace/")
+        notify(self.asker, "Bad link", "https://evil.com/")
+        self.client.force_login(self.asker)
+        page = self.client.get(reverse("home"))
+        self.assertContains(page, 'class="nav-bell-count">2<')
+        self.assertRedirects(self.client.get(reverse("notification_open", args=[note.pk])), "/marketplace/", fetch_redirect_response=False)
+        evil = self.Notification.objects.get(text="Bad link")
+        self.assertEqual(self.client.get(reverse("notification_open", args=[evil.pk]))["Location"], reverse("notifications"))
+        # Opening one keeps it in the bell (still counted) until it's cleared.
+        self.assertContains(self.client.get(reverse("home")), 'class="nav-bell-count">2<')
+        self.client.post(reverse("notification_clear", args=[note.pk]))
+        self.assertContains(self.client.get(reverse("home")), 'class="nav-bell-count">1<')
+        self.client.post(reverse("notifications_clear_all"))
+        self.assertFalse(self.Notification.objects.filter(user=self.asker).exists())
+        # Nobody can open someone else's notification, and logged-out visitors don't see a bell.
+        self.client.force_login(self.helper)
+        mine = self.Notification.objects.create(user=self.asker, text="Private")
+        self.assertEqual(self.client.get(reverse("notification_open", args=[mine.pk])).status_code, 404)
+        self.client.post(reverse("notification_clear", args=[mine.pk]))
+        self.assertTrue(self.Notification.objects.filter(pk=mine.pk).exists())
+        self.client.logout()
+        self.assertNotContains(self.client.get(reverse("home")), "nav-bell")
+
+    def test_old_notifications_are_deleted(self):
+        from .bell import notify, purge_old
+        old = notify(self.asker, "Old news")
+        self.Notification.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=31))
+        notify(self.asker, "Fresh news")
+        purge_old()
+        self.assertEqual(self.texts(self.asker), ["Fresh news"])

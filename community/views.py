@@ -708,3 +708,52 @@ def verify_phone(request):
         messages.error(request, "Invalid or expired code. Request a new verification code and try again.")
 
     return redirect("dashboard")
+
+
+# --- Notification bell -----------------------------------------------------------------------------
+from django.utils.http import url_has_allowed_host_and_scheme  # noqa: E402
+from django.views.decorators.http import require_POST  # noqa: E402
+from .models import Notification  # noqa: E402
+from . import bell  # noqa: E402
+
+
+@login_required
+def notifications(request):
+    bell.purge_old()
+    items = list(request.user.notifications.all()[:100])
+    return render(request, "community/notifications.html", {"items": items})
+
+
+@login_required
+def notification_open(request, pk):
+    """Mark one notification read and go to what it's about."""
+    item = get_object_or_404(Notification, pk=pk, user=request.user)
+    if not item.read:
+        item.read = True
+        item.save(update_fields=["read"])
+    target = item.url or reverse("notifications")
+    if not target.startswith("/") or not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
+        target = reverse("notifications")
+    return redirect(target)
+
+
+def _back(request):
+    back = request.POST.get("next", "")
+    if not back.startswith("/") or not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+        back = reverse("notifications")
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def notification_clear(request, pk):
+    """Remove one notification from the bell (only the owner can)."""
+    request.user.notifications.filter(pk=pk).delete()
+    return _back(request)
+
+
+@login_required
+@require_POST
+def notifications_clear_all(request):
+    request.user.notifications.all().delete()
+    return _back(request)

@@ -161,6 +161,10 @@ class SpotPhotoUploadView(APIView):
         is_admin = bool(request.user.is_authenticated and request.user.is_staff)
         status_value = Photo.STATUS_APPROVED if is_admin else Photo.STATUS_PENDING
         Photo.objects.create(spot=spot, image=image, status=status_value)
+        if status_value == Photo.STATUS_PENDING:
+            from community import bell
+            bell.notify_admins(f"Needs your approval: a map photo at “{bell.short(spot.name, 40)}”",
+                               bell.admin_url("mapapi_photo"), "bi-image")
 
         data = SpotSerializer(spot, context=spot_context(request)).data
         return Response(data, status=201)
@@ -201,6 +205,9 @@ class PhotoReportView(APIView):
             photo.save(update_fields=["status"])
             reporter = request.user if request.user.is_authenticated else None
             notify_admin_of_photo_report(request, photo.spot, reporter)
+            from community import bell
+            bell.notify_admins(f"Someone reported a map photo at “{bell.short(photo.spot.name, 40)}”",
+                               bell.admin_url("mapapi_photo"), "bi-flag")
         data = SpotSerializer(photo.spot, context=spot_context(request)).data
         return Response(data)
 
