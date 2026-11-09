@@ -31,5 +31,6 @@ urlpatterns = [
     path("chat/<int:pk>/report/", views.report_chat_message, name="report_chat_message"),
     path("notifications/", views.notifications, name="notifications"),
     path("notifications/<int:pk>/", views.notification_open, name="notification_open"),
-    path("notifications/read-all/", views.notifications_read_all, name="notifications_read_all"),
+    path("notifications/<int:pk>/clear/", views.notification_clear, name="notification_clear"),
+    path("notifications/clear-all/", views.notifications_clear_all, name="notifications_clear_all"),
 ]

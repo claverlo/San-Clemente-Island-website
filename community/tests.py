@@ -1110,11 +1110,18 @@ class NotificationBellTests(TestCase):
         self.assertRedirects(self.client.get(reverse("notification_open", args=[note.pk])), "/marketplace/", fetch_redirect_response=False)
         evil = self.Notification.objects.get(text="Bad link")
         self.assertEqual(self.client.get(reverse("notification_open", args=[evil.pk]))["Location"], reverse("notifications"))
-        self.client.post(reverse("notifications_read_all"))
-        self.assertFalse(self.Notification.objects.filter(user=self.asker, read=False).exists())
+        # Opening one keeps it in the bell (still counted) until it's cleared.
+        self.assertContains(self.client.get(reverse("home")), 'class="nav-bell-count">2<')
+        self.client.post(reverse("notification_clear", args=[note.pk]))
+        self.assertContains(self.client.get(reverse("home")), 'class="nav-bell-count">1<')
+        self.client.post(reverse("notifications_clear_all"))
+        self.assertFalse(self.Notification.objects.filter(user=self.asker).exists())
         # Nobody can open someone else's notification, and logged-out visitors don't see a bell.
         self.client.force_login(self.helper)
-        self.assertEqual(self.client.get(reverse("notification_open", args=[note.pk])).status_code, 404)
+        mine = self.Notification.objects.create(user=self.asker, text="Private")
+        self.assertEqual(self.client.get(reverse("notification_open", args=[mine.pk])).status_code, 404)
+        self.client.post(reverse("notification_clear", args=[mine.pk]))
+        self.assertTrue(self.Notification.objects.filter(pk=mine.pk).exists())
         self.client.logout()
         self.assertNotContains(self.client.get(reverse("home")), "nav-bell")
 

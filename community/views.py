@@ -737,11 +737,23 @@ def notification_open(request, pk):
     return redirect(target)
 
 
-@login_required
-@require_POST
-def notifications_read_all(request):
-    request.user.notifications.filter(read=False).update(read=True)
+def _back(request):
     back = request.POST.get("next", "")
     if not back.startswith("/") or not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
         back = reverse("notifications")
     return redirect(back)
+
+
+@login_required
+@require_POST
+def notification_clear(request, pk):
+    """Remove one notification from the bell (only the owner can)."""
+    request.user.notifications.filter(pk=pk).delete()
+    return _back(request)
+
+
+@login_required
+@require_POST
+def notifications_clear_all(request):
+    request.user.notifications.all().delete()
+    return _back(request)
