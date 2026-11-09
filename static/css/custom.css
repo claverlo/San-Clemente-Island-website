@@ -258,6 +258,8 @@ svg {
     border-bottom: 2px solid #780000;
     background: #b4232f;
     color: #fff;
+    font-size: 0.9rem;
+    line-height: 1.4;
     font-weight: 800;
     letter-spacing: 0.035em;
     white-space: nowrap;
@@ -270,7 +272,7 @@ svg {
 }
 
 .listing-safety-track span {
-    padding: 0.75rem 3rem;
+    padding: 0.45rem 3rem;
 }
 
 .listing-safety-track i {
