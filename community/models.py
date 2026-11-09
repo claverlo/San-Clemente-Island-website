@@ -290,3 +290,21 @@ class RateLimitHit(models.Model):
     """One attempt at something we limit (wrong password, report, sign-up...). Old rows are deleted after a day."""
     key = models.CharField(max_length=200, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class Notification(models.Model):
+    """One line in a member's notification bell. Deleted automatically after 30 days."""
+    KEEP_FOR = timedelta(days=30)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    icon = models.CharField(max_length=40, default="bi-bell")
+    text = models.CharField(max_length=255)
+    url = models.CharField(max_length=300, blank=True)
+    key = models.CharField(max_length=120, blank=True, db_index=True)  # stops the same thing being sent twice
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user}: {self.text[:50]}"

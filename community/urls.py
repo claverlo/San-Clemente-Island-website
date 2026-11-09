@@ -29,4 +29,7 @@ urlpatterns = [
     path("offline/", views.offline, name="offline"),
     path("account/delete/", views.delete_account, name="delete_account"), path("alerts/off/<uuid:token>/", views.alerts_off, name="alerts_off"),
     path("chat/<int:pk>/report/", views.report_chat_message, name="report_chat_message"),
+    path("notifications/", views.notifications, name="notifications"),
+    path("notifications/<int:pk>/", views.notification_open, name="notification_open"),
+    path("notifications/read-all/", views.notifications_read_all, name="notifications_read_all"),
 ]

@@ -37,6 +37,11 @@ def notify_subscribers(request, category, title, path, poster, text=""):
     if not recipients:
         return 0
 
+    from .bell import notify, short
+    for profile, word in recipients:
+        why = f'mentions “{word}”' if word else f"in {category}"
+        notify(profile.user, f"New post {why}: {short(title, 70)}", path, "bi-bell-fill")
+
     post_url = request.build_absolute_uri(path)
     settings_url = request.build_absolute_uri(reverse("dashboard") + "#email-alerts")
     emails = []
